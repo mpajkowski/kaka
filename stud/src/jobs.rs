@@ -19,7 +19,7 @@ impl From<()> for Outcome {
 }
 
 pub struct Jobs {
-    pub jobs: FuturesUnordered<JobFuture>,
+    pub(super) jobs: FuturesUnordered<JobFuture>,
 }
 
 impl Jobs {
@@ -39,20 +39,23 @@ impl Jobs {
 
 #[cfg(test)]
 mod test {
+    use futures_util::StreamExt;
+
     use super::*;
 
     #[tokio::test]
     async fn test_job() {
         let mut jobs = Jobs::new();
         jobs.spawn(async move { crate::Result::Ok(()) });
-        jobs.spawn(async move { Ok(Outcome { exit: true }) });
 
         assert_eq!(
-            jobs.jobs.pop_front().unwrap().await.unwrap(),
+            jobs.jobs.next().await.unwrap().unwrap(),
             Outcome { exit: false },
         );
+
+        jobs.spawn(async move { Ok(Outcome { exit: true }) });
         assert_eq!(
-            jobs.jobs.pop_front().unwrap().await.unwrap(),
+            jobs.jobs.next().await.unwrap().unwrap(),
             Outcome { exit: true },
         );
     }

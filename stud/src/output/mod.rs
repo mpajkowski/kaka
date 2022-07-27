@@ -1,4 +1,7 @@
-use std::io::{stdout, Write};
+use std::{
+    fmt::Display,
+    io::{stdout, Write},
+};
 
 use crossterm::{
     cursor::MoveTo,
@@ -42,6 +45,23 @@ impl Output {
 
             hook(info)
         }));
+    }
+
+    pub fn dump(&mut self, contents: impl Display) -> Result<()> {
+        let mut stdout = stdout();
+        stdout.queue(Clear(ClearType::All))?;
+        write!(stdout, "{}", contents)?;
+        stdout.flush()?;
+
+        Ok(())
+    }
+
+    pub fn clear(&mut self) -> Result<()> {
+        let mut stdout = stdout();
+        stdout.queue(Clear(ClearType::All))?;
+        stdout.flush()?;
+
+        Ok(())
     }
 }
 
