@@ -4,4 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+crossterm = { version = "0.24.0", features = ["futures-core", "event-stream"] }
+thiserror = "1.0.31"
+
 stud-core = { path = "../stud-core" }
+futures-util = "0.3.21"
+tokio = { version = "1.20.1", features = ["rt-multi-thread", "io-std", "net", "macros"] }
