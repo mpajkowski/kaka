@@ -1,0 +1,7 @@
+[package]
+name = "stud"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+stud-core = { path = "../stud-core" }
