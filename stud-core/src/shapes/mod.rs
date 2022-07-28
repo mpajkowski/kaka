@@ -1,3 +1,3 @@
-mod vec2d;
+mod point;
 
-pub use vec2d::Vec2d;
+pub use point::Point;

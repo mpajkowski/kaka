@@ -8,13 +8,13 @@ use crossterm::{
     terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand, QueueableCommand,
 };
-use stud_core::shapes::Vec2d;
+use stud_core::shapes::Point;
 
 use crate::Result;
 
 pub struct Output {
     _raw_terminal_guard: RawTerminalGuard,
-    dimensions: Vec2d,
+    dimensions: Point,
 }
 
 impl Output {
@@ -23,7 +23,7 @@ impl Output {
 
         let this = Self {
             _raw_terminal_guard: RawTerminalGuard::init()?,
-            dimensions: Vec2d::from(dimensions),
+            dimensions: Point::from(dimensions),
         };
 
         Self::setup_panic();

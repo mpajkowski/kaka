@@ -1,9 +1,10 @@
 use std::{fmt::Write, io};
 
-use crossterm::event::{Event, KeyCode};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use futures_util::{Stream, StreamExt};
 
 use crate::{
+    editor::{Editor, KeymapTreeElement},
     jobs::{Jobs, Outcome},
     output::Output,
 };
@@ -12,6 +13,7 @@ pub struct App {
     jobs: Jobs,
     output: Output,
     logs: String,
+    editor: Editor,
 }
 
 impl App {
@@ -20,6 +22,7 @@ impl App {
             output,
             jobs: Jobs::new(),
             logs: String::new(),
+            editor: Editor::new(),
         }
     }
 
@@ -54,9 +57,59 @@ impl App {
                 KeyCode::Char('q') => exit = true,
                 _ => {}
             }
+            self.on_key_event(k)
         }
 
         Ok(exit)
+    }
+
+    fn on_key_event(&mut self, event: KeyEvent) {
+        let call = {
+            let (chain, keymap_element) = {
+                let buffer = self.editor.buffers.get_mut(&self.editor.current).unwrap();
+                let keymap = buffer.keymap();
+
+                if let Some(buf1) = self.editor.buffered_keys.first() {
+                    (true, keymap.feed(*buf1))
+                } else {
+                    (false, keymap.feed(event))
+                }
+            };
+
+            let mut keymap_element = match keymap_element {
+                Some(ke) => ke,
+                None => return,
+            };
+
+            for buf_key in self.editor.buffered_keys.iter().skip(1) {
+                keymap_element = match keymap_element {
+                    KeymapTreeElement::Node(k) => k.feed(*buf_key).unwrap(),
+                    _ => unreachable!(),
+                };
+            }
+
+            let mut call = None;
+            match keymap_element {
+                KeymapTreeElement::Node(n) if chain => match n.feed(event) {
+                    Some(KeymapTreeElement::Leaf(command)) => {
+                        call = Some(command.clone());
+                        self.editor.buffered_keys.clear();
+                    }
+                    Some(KeymapTreeElement::Node(_)) => self.editor.buffered_keys.push(event),
+                    None => self.editor.buffered_keys.clear(),
+                },
+                KeymapTreeElement::Node(_) => self.editor.buffered_keys.push(event),
+                KeymapTreeElement::Leaf(command) => {
+                    call = Some(command.clone());
+                    self.editor.buffered_keys.clear();
+                }
+            };
+            call
+        };
+
+        if let Some(call) = call {
+            call.call(&mut self.editor, &mut self.output);
+        }
     }
 
     fn on_job_outcome(&mut self, outcome: Outcome) -> bool {

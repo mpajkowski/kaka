@@ -10,3 +10,4 @@ thiserror = "1.0.31"
 stud-core = { path = "../stud-core" }
 futures-util = "0.3.21"
 tokio = { version = "1.20.1", features = ["rt-multi-thread", "io-std", "net", "macros"] }
+cascade = "1.0.0"

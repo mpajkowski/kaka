@@ -1,4 +1,7 @@
 mod document;
 pub mod shapes;
 
-pub use document::Document;
+// re-export ropey
+pub use ropey;
+
+pub use document::{Document, DocumentId};
