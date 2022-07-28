@@ -8,12 +8,12 @@ use crossterm::{
     terminal::{Clear, ClearType, EnterAlternateScreen, LeaveAlternateScreen},
     ExecutableCommand, QueueableCommand,
 };
-use stud_core::Vec2d;
+use stud_core::shapes::Vec2d;
 
 use crate::Result;
 
 pub struct Output {
-    raw_terminal_guard: RawTerminalGuard,
+    _raw_terminal_guard: RawTerminalGuard,
     dimensions: Vec2d,
 }
 
@@ -22,7 +22,7 @@ impl Output {
         let dimensions = crossterm::terminal::size()?;
 
         let this = Self {
-            raw_terminal_guard: RawTerminalGuard::init()?,
+            _raw_terminal_guard: RawTerminalGuard::init()?,
             dimensions: Vec2d::from(dimensions),
         };
 

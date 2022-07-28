@@ -3,7 +3,6 @@ use std::future::Future;
 use futures_util::{future::BoxFuture, stream::FuturesUnordered, FutureExt, TryFutureExt};
 
 use crate::Result;
-use std::collections::VecDeque;
 
 pub type JobFuture = BoxFuture<'static, Result<Outcome>>;
 

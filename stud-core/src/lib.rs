@@ -1,3 +1,4 @@
-mod vec2d;
+mod document;
+pub mod shapes;
 
-pub use vec2d::Vec2d;
+pub use document::Document;
