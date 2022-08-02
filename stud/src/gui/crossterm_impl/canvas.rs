@@ -1,23 +1,25 @@
-use std::io::{stdout, Write};
+use std::io::{self, stdout, Write};
 
 use anyhow::Result;
 use crossterm::{
     cursor::{Hide, MoveTo, Show},
     execute, queue,
-    style::Print,
+    style::{
+        Attribute as CAttribute, Color as CColor, Print, SetAttribute, SetBackgroundColor,
+        SetForegroundColor,
+    },
     terminal::{Clear, ClearType, LeaveAlternateScreen},
     ExecutableCommand,
 };
 
 use stud_core::shapes::{Point, Rect};
 
-use crate::gui::{Canvas, Cell};
+use crate::gui::{Canvas, Cell, Color, Modifier};
 
 use super::RawTerminalGuard;
 
 pub struct CrosstermCanvas<T> {
     writer: T,
-    cursor: Point,
     rect: Rect,
     _raw_terminal_guard: Option<RawTerminalGuard>,
 }
@@ -33,7 +35,6 @@ impl<T: Write> CrosstermCanvas<T> {
 
         let mut this = Self {
             writer,
-            cursor: start_point,
             rect: Rect::new(start_point.x, start_point.y, width, height),
             _raw_terminal_guard: setup_environment.then(RawTerminalGuard::init).transpose()?,
         };
@@ -69,11 +70,33 @@ impl<T: Write> Canvas for CrosstermCanvas<T> {
 
     fn draw<'a, I: Iterator<Item = (Point, &'a Cell)>>(&mut self, cells: I) -> Result<()> {
         let mut prev_point = None;
+        let mut fg = Color::Reset;
+        let mut bg = Color::Reset;
+        let mut modifier = Modifier::empty();
 
         for (point, cell) in cells {
             if prev_point != Some(Point::new(point.x + 1, point.y)) {
                 queue!(self.writer, MoveTo(point.x, point.y))?;
-                prev_point = Some(point);
+            }
+            prev_point = Some(point);
+
+            if cell.modifier != modifier {
+                let diff = ModifierDiff {
+                    from: modifier,
+                    to: cell.modifier,
+                };
+                diff.queue(&mut self.writer)?;
+                modifier = cell.modifier;
+            }
+
+            if cell.fg != fg {
+                queue!(self.writer, SetForegroundColor(CColor::from(cell.fg)))?;
+                fg = cell.fg;
+            }
+
+            if cell.bg != bg {
+                queue!(self.writer, SetBackgroundColor(CColor::from(cell.bg)))?;
+                bg = cell.bg;
             }
 
             queue!(self.writer, Print(&cell.symbol))?;
@@ -105,6 +128,99 @@ impl<T: Write> Canvas for CrosstermCanvas<T> {
 
     fn show_cursor(&mut self) -> Result<()> {
         execute!(self.writer, Show)?;
+        Ok(())
+    }
+}
+
+impl From<Color> for CColor {
+    fn from(c: Color) -> Self {
+        match c {
+            Color::Reset => CColor::Reset,
+            Color::Black => CColor::Black,
+            Color::Red => CColor::Red,
+            Color::Green => CColor::Green,
+            Color::Yellow => CColor::Yellow,
+            Color::Blue => CColor::Blue,
+            Color::Magenta => CColor::Magenta,
+            Color::Cyan => CColor::Cyan,
+            Color::Gray => CColor::Grey,
+            Color::DarkGray => CColor::DarkGrey,
+            Color::LightRed => CColor::Red,
+            Color::LightGreen => CColor::Green,
+            Color::LightYellow => CColor::Yellow,
+            Color::LightBlue => CColor::Blue,
+            Color::LightMagenta => CColor::Magenta,
+            Color::LightCyan => CColor::Cyan,
+            Color::White => CColor::White,
+            Color::Rgb(r, g, b) => CColor::Rgb { r, g, b },
+            Color::Indexed(i) => CColor::AnsiValue(i),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct ModifierDiff {
+    pub from: Modifier,
+    pub to: Modifier,
+}
+
+impl ModifierDiff {
+    fn queue<W>(&self, mut w: W) -> Result<()>
+    where
+        W: io::Write,
+    {
+        let removed = self.from - self.to;
+        if removed.contains(Modifier::REVERSED) {
+            queue!(w, SetAttribute(CAttribute::NoReverse))?;
+        }
+        if removed.contains(Modifier::BOLD) {
+            queue!(w, SetAttribute(CAttribute::NormalIntensity))?;
+            if self.to.contains(Modifier::DIM) {
+                queue!(w, SetAttribute(CAttribute::Dim))?;
+            }
+        }
+        if removed.contains(Modifier::ITALIC) {
+            queue!(w, SetAttribute(CAttribute::NoItalic))?;
+        }
+        if removed.contains(Modifier::UNDERLINED) {
+            queue!(w, SetAttribute(CAttribute::NoUnderline))?;
+        }
+        if removed.contains(Modifier::DIM) {
+            queue!(w, SetAttribute(CAttribute::NormalIntensity))?;
+        }
+        if removed.contains(Modifier::CROSSED_OUT) {
+            queue!(w, SetAttribute(CAttribute::NotCrossedOut))?;
+        }
+        if removed.contains(Modifier::SLOW_BLINK) || removed.contains(Modifier::RAPID_BLINK) {
+            queue!(w, SetAttribute(CAttribute::NoBlink))?;
+        }
+
+        let added = self.to - self.from;
+        if added.contains(Modifier::REVERSED) {
+            queue!(w, SetAttribute(CAttribute::Reverse))?;
+        }
+        if added.contains(Modifier::BOLD) {
+            queue!(w, SetAttribute(CAttribute::Bold))?;
+        }
+        if added.contains(Modifier::ITALIC) {
+            queue!(w, SetAttribute(CAttribute::Italic))?;
+        }
+        if added.contains(Modifier::UNDERLINED) {
+            queue!(w, SetAttribute(CAttribute::Underlined))?;
+        }
+        if added.contains(Modifier::DIM) {
+            queue!(w, SetAttribute(CAttribute::Dim))?;
+        }
+        if added.contains(Modifier::CROSSED_OUT) {
+            queue!(w, SetAttribute(CAttribute::CrossedOut))?;
+        }
+        if added.contains(Modifier::SLOW_BLINK) {
+            queue!(w, SetAttribute(CAttribute::SlowBlink))?;
+        }
+        if added.contains(Modifier::RAPID_BLINK) {
+            queue!(w, SetAttribute(CAttribute::RapidBlink))?;
+        }
+
         Ok(())
     }
 }

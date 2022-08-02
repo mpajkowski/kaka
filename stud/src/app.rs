@@ -5,6 +5,7 @@ use futures_util::{Stream, StreamExt};
 
 use crate::{
     editor::{Editor, KeymapTreeElement},
+    gui::DummyWidget,
     jobs::{Jobs, Outcome},
 };
 
@@ -31,10 +32,20 @@ impl App {
         &mut self,
         term_events: &mut (impl Stream<Item = Result<Event, io::Error>> + Unpin),
     ) -> anyhow::Result<()> {
+        self.gui.composer_mut().push_widget(DummyWidget);
+
         loop {
             let exit = tokio::select! {
-                Some(ev) = term_events.next() => self.on_term_event(ev?)?,
-                Some(outcome) = self.jobs.jobs.next() => self.on_job_outcome(outcome?),
+                Some(ev) = term_events.next() => {
+                    let exit = self.on_term_event(ev?)?;
+                    self.render()?;
+                    exit
+                },
+                Some(outcome) = self.jobs.jobs.next() => {
+                    let exit = self.on_job_outcome(outcome?);
+                    self.render()?;
+                    exit
+                },
             };
 
             if exit {
@@ -112,5 +123,9 @@ impl App {
         let _ = write!(self.logs, "outcome: {outcome:?}");
 
         outcome.exit
+    }
+
+    fn render(&mut self) -> anyhow::Result<()> {
+        self.gui.render()
     }
 }

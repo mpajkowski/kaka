@@ -31,6 +31,4 @@ impl Debug for Command {
 }
 
 // Commands
-pub fn dummy(_: &mut Editor, _: &mut Composer) {
-    println!("test fn called");
-}
+pub fn dummy(_: &mut Editor, c: &mut Composer) {}
