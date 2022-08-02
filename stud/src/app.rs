@@ -45,7 +45,7 @@ impl App {
     }
 
     fn on_term_event(&mut self, event: Event) -> crate::Result<bool> {
-        let _ = write!(self.logs, "event: {event:?}");
+        let _ = writeln!(self.logs, "event: {event:?}");
 
         let mut exit = false;
         if let Event::Key(k) = event {

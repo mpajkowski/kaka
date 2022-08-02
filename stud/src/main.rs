@@ -3,6 +3,7 @@ mod editor;
 mod error;
 mod jobs;
 mod output;
+mod widget;
 
 use app::App;
 use crossterm::event::EventStream;

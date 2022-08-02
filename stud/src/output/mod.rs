@@ -1,3 +1,7 @@
+mod canvas;
+mod crossterm_canvas;
+mod error;
+
 use std::{
     fmt::Display,
     io::{stdout, Write},
@@ -50,7 +54,7 @@ impl Output {
     pub fn dump(&mut self, contents: impl Display) -> Result<()> {
         let mut stdout = stdout();
         stdout.queue(Clear(ClearType::All))?;
-        write!(stdout, "{}", contents)?;
+        write!(stdout, "{contents}")?;
         stdout.flush()?;
 
         Ok(())
