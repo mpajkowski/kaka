@@ -6,20 +6,21 @@ use futures_util::{Stream, StreamExt};
 use crate::{
     editor::{Editor, KeymapTreeElement},
     jobs::{Jobs, Outcome},
-    output::Output,
 };
+
+use crate::Gui;
 
 pub struct App {
     jobs: Jobs,
-    output: Output,
+    gui: Gui,
     logs: String,
     editor: Editor,
 }
 
 impl App {
-    pub fn new(output: Output) -> Self {
+    pub fn new(gui: Gui) -> Self {
         Self {
-            output,
+            gui,
             jobs: Jobs::new(),
             logs: String::new(),
             editor: Editor::new(),
@@ -29,7 +30,7 @@ impl App {
     pub async fn run(
         &mut self,
         term_events: &mut (impl Stream<Item = Result<Event, io::Error>> + Unpin),
-    ) -> crate::Result<()> {
+    ) -> anyhow::Result<()> {
         loop {
             let exit = tokio::select! {
                 Some(ev) = term_events.next() => self.on_term_event(ev?)?,
@@ -44,18 +45,13 @@ impl App {
         Ok(())
     }
 
-    fn on_term_event(&mut self, event: Event) -> crate::Result<bool> {
+    fn on_term_event(&mut self, event: Event) -> anyhow::Result<bool> {
         let _ = writeln!(self.logs, "event: {event:?}");
 
         let mut exit = false;
         if let Event::Key(k) = event {
-            match k.code {
-                KeyCode::Char('l') => {
-                    self.output.clear()?;
-                    self.output.dump(&self.logs)?;
-                }
-                KeyCode::Char('q') => exit = true,
-                _ => {}
+            if let KeyCode::Char('q') = k.code {
+                exit = true
             }
             self.on_key_event(k)
         }
@@ -108,7 +104,7 @@ impl App {
         };
 
         if let Some(call) = call {
-            call.call(&mut self.editor, &mut self.output);
+            call.call(&mut self.editor, self.gui.composer_mut());
         }
     }
 

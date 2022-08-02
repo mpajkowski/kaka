@@ -11,7 +11,7 @@ pub use keymap::{Keymap, KeymapTreeElement};
 pub use mode::{Mode, Registry as ModeRegistry};
 use stud_core::{Document, DocumentId};
 
-use crate::output::Output;
+use crate::{gui::Composer, Gui};
 
 use self::command::{dummy, Command};
 
@@ -55,5 +55,5 @@ impl Editor {
         }
     }
 
-    pub(super) fn on_key_event(&mut self, event: KeyEvent, output: &mut Output) {}
+    pub(super) fn on_key_event(&mut self, event: KeyEvent, composer: &mut Composer) {}
 }

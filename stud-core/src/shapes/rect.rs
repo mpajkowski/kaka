@@ -47,4 +47,8 @@ impl Rect {
     pub fn left_y(&self) -> u16 {
         self.left_y
     }
+
+    pub fn area(&self) -> u16 {
+        self.width * self.height
+    }
 }

@@ -1,8 +1,7 @@
 use std::future::Future;
 
+use anyhow::Result;
 use futures_util::{future::BoxFuture, stream::FuturesUnordered, FutureExt, TryFutureExt};
-
-use crate::Result;
 
 pub type JobFuture = BoxFuture<'static, Result<Outcome>>;
 
@@ -45,7 +44,7 @@ mod test {
     #[tokio::test]
     async fn test_job() {
         let mut jobs = Jobs::new();
-        jobs.spawn(async move { crate::Result::Ok(()) });
+        jobs.spawn(async move { anyhow::Ok(()) });
 
         assert_eq!(
             jobs.jobs.next().await.unwrap().unwrap(),

@@ -1,24 +1,26 @@
 use std::{borrow::Cow, fmt::Debug};
 
 use super::Editor;
-use crate::output::Output;
+use crate::gui::Composer;
+
+pub type CommandCallback = fn(&mut Editor, &mut Composer);
 
 #[derive(Clone)]
 pub struct Command {
     name: Cow<'static, str>,
-    fun: fn(&mut Editor, &mut Output),
+    fun: CommandCallback,
 }
 
 impl Command {
-    pub fn new(name: impl Into<Cow<'static, str>>, fun: fn(&mut Editor, &mut Output)) -> Self {
+    pub fn new(name: impl Into<Cow<'static, str>>, fun: CommandCallback) -> Self {
         Self {
             name: name.into(),
             fun,
         }
     }
 
-    pub fn call(&self, editor: &mut Editor, output: &mut Output) {
-        (self.fun)(editor, output)
+    pub fn call(&self, editor: &mut Editor, composer: &mut Composer) {
+        (self.fun)(editor, composer)
     }
 }
 
@@ -29,6 +31,6 @@ impl Debug for Command {
 }
 
 // Commands
-pub fn dummy(editor: &mut Editor, _: &mut Output) {
+pub fn dummy(_: &mut Editor, _: &mut Composer) {
     println!("test fn called");
 }
