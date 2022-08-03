@@ -83,6 +83,11 @@ impl Surface {
         Self::filled(area, &cell)
     }
 
+    pub fn resize(&mut self, area: Rect) {
+        self.area = area;
+        self.content.resize(area.area() as usize, Cell::default());
+    }
+
     pub fn filled(area: Rect, cell: &Cell) -> Self {
         let size = area.area() as usize;
         let mut content: Vec<Cell> = Vec::with_capacity(size);

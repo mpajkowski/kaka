@@ -11,8 +11,6 @@ pub use keymap::{Keymap, KeymapTreeElement};
 pub use mode::{Mode, Registry as ModeRegistry};
 use stud_core::{Document, DocumentId};
 
-use self::command::*;
-
 pub use self::command::Command;
 
 /// Holds editor state
@@ -63,12 +61,6 @@ impl Editor {
                 (buf, doc)
             })
             .unwrap()
-    }
-
-    pub fn assign_mode(&mut self, buffer_id: BufferId, mode: &str) -> Option<()> {
-        let mode = self.mode_registry.mode_by_name(mode)?;
-        let mut buf = self.buffers.get_mut(&buffer_id).unwrap().set_mode(mode);
-        Some(())
     }
 
     pub fn should_exit(&self) -> bool {

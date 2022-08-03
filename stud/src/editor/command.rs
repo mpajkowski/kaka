@@ -1,7 +1,5 @@
 use std::{borrow::Cow, fmt::Debug};
 
-use stud_core::ropey::Rope;
-
 use super::Editor;
 
 pub type CommandCallback = fn(&mut Editor);

@@ -21,14 +21,14 @@ impl Keymap {
     pub fn register_simple_mapping(
         &mut self,
         mapping: &[u8],
-        command_fn: CommandCallback,
+        _command_fn: CommandCallback,
     ) -> &mut Self {
         for ch in mapping.iter() {
             debug_assert!(
                 ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() || ch.is_ascii_punctuation()
             )
         }
-        self
+        todo!("Implement vim-like mapping parser")
     }
 
     /// used for tests
@@ -81,13 +81,10 @@ pub enum KeymapTreeElement {
 
 #[cfg(test)]
 mod test {
-    use crate::editor::command::dummy;
-
     use super::*;
 
     #[test]
     fn test_keymap() {
-        let cmd = Command::new("dummy", dummy);
         let keymap = Keymap::xd();
         println!("Keymap {keymap:?}");
     }
