@@ -16,17 +16,12 @@ impl From<()> for Outcome {
     }
 }
 
+#[derive(Default)]
 pub struct Jobs {
     pub(super) jobs: FuturesUnordered<JobFuture>,
 }
 
 impl Jobs {
-    pub fn new() -> Self {
-        Self {
-            jobs: FuturesUnordered::new(),
-        }
-    }
-
     pub fn spawn<O: Into<Outcome>, F: Future<Output = Result<O>> + Send + 'static>(
         &mut self,
         future: F,
@@ -43,7 +38,7 @@ mod test {
 
     #[tokio::test]
     async fn test_job() {
-        let mut jobs = Jobs::new();
+        let mut jobs = Jobs::default();
         jobs.spawn(async move { anyhow::Ok(()) });
 
         assert_eq!(

@@ -1,11 +1,11 @@
 use std::{fmt::Write, io};
 
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::Event;
 use futures_util::{Stream, StreamExt};
 
 use crate::{
-    editor::{Editor, KeymapTreeElement},
-    gui::DummyWidget,
+    editor::Editor,
+    gui::EditorWidget,
     jobs::{Jobs, Outcome},
 };
 
@@ -22,9 +22,9 @@ impl App {
     pub fn new(gui: Gui) -> Self {
         Self {
             gui,
-            jobs: Jobs::new(),
+            jobs: Jobs::default(),
             logs: String::new(),
-            editor: Editor::new(),
+            editor: Editor::init(),
         }
     }
 
@@ -32,21 +32,23 @@ impl App {
         &mut self,
         term_events: &mut (impl Stream<Item = Result<Event, io::Error>> + Unpin),
     ) -> anyhow::Result<()> {
-        self.gui.composer_mut().push_widget(DummyWidget);
+        self.gui.composer_mut().push_widget(EditorWidget::default());
 
         loop {
-            let exit = tokio::select! {
+            let should_redraw = tokio::select! {
                 Some(ev) = term_events.next() => {
-                    let exit = self.on_term_event(ev?)?;
-                    self.render()?;
-                    exit
+                    self.on_term_event(ev?)
                 },
                 Some(outcome) = self.jobs.jobs.next() => {
-                    let exit = self.on_job_outcome(outcome?);
-                    self.render()?;
-                    exit
+                    self.on_job_outcome(outcome?)
                 },
             };
+
+            let exit = self.editor.should_exit();
+
+            if should_redraw && !exit {
+                self.render()?;
+            }
 
             if exit {
                 break;
@@ -56,68 +58,14 @@ impl App {
         Ok(())
     }
 
-    fn on_term_event(&mut self, event: Event) -> anyhow::Result<bool> {
+    fn on_term_event(&mut self, event: Event) -> bool {
         let _ = writeln!(self.logs, "event: {event:?}");
 
-        let mut exit = false;
-        if let Event::Key(k) = event {
-            if let KeyCode::Char('q') = k.code {
-                exit = true
-            }
-            self.on_key_event(k)
-        }
-
-        Ok(exit)
+        self.gui
+            .handle_event(event, &mut self.editor, &mut self.jobs)
     }
 
-    fn on_key_event(&mut self, event: KeyEvent) {
-        let call = {
-            let (chain, keymap_element) = {
-                let buffer = self.editor.buffers.get_mut(&self.editor.current).unwrap();
-                let keymap = buffer.keymap();
 
-                if let Some(buf1) = self.editor.buffered_keys.first() {
-                    (true, keymap.feed(*buf1))
-                } else {
-                    (false, keymap.feed(event))
-                }
-            };
-
-            let mut keymap_element = match keymap_element {
-                Some(ke) => ke,
-                None => return,
-            };
-
-            for buf_key in self.editor.buffered_keys.iter().skip(1) {
-                keymap_element = match keymap_element {
-                    KeymapTreeElement::Node(k) => k.feed(*buf_key).unwrap(),
-                    _ => unreachable!(),
-                };
-            }
-
-            let mut call = None;
-            match keymap_element {
-                KeymapTreeElement::Node(n) if chain => match n.feed(event) {
-                    Some(KeymapTreeElement::Leaf(command)) => {
-                        call = Some(command.clone());
-                        self.editor.buffered_keys.clear();
-                    }
-                    Some(KeymapTreeElement::Node(_)) => self.editor.buffered_keys.push(event),
-                    None => self.editor.buffered_keys.clear(),
-                },
-                KeymapTreeElement::Node(_) => self.editor.buffered_keys.push(event),
-                KeymapTreeElement::Leaf(command) => {
-                    call = Some(command.clone());
-                    self.editor.buffered_keys.clear();
-                }
-            };
-            call
-        };
-
-        if let Some(call) = call {
-            call.call(&mut self.editor, self.gui.composer_mut());
-        }
-    }
 
     fn on_job_outcome(&mut self, outcome: Outcome) -> bool {
         let _ = write!(self.logs, "outcome: {outcome:?}");
@@ -126,6 +74,6 @@ impl App {
     }
 
     fn render(&mut self) -> anyhow::Result<()> {
-        self.gui.render()
+        self.gui.render(&mut self.editor, &mut self.jobs)
     }
 }

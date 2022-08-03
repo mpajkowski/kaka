@@ -1,17 +1,65 @@
-mod dummy;
+mod editor;
 mod widget;
 
-pub use dummy::DummyWidget;
+use crossterm::event::Event;
+pub use editor::EditorWidget;
 
-use stud_core::shapes::Rect;
+use stud_core::{shapes::Rect, Document};
+
+use crate::{
+    editor::{Buffer, Editor},
+    jobs::Jobs,
+};
 
 use self::widget::Widget;
 
 use super::{canvas::Canvas, surface::Surface};
 
+pub type Callback = Box<dyn FnOnce(&mut Composer, &mut Editor)>;
+
+pub struct Context<'a> {
+    pub editor: &'a mut Editor,
+    pub jobs: &'a mut Jobs,
+}
+
+impl<'a> Context<'a> {
+    pub fn current_buffer_and_doc(&mut self) -> (&mut Buffer, &mut Document) {
+        self.editor.current_buffer_and_doc()
+    }
+}
+
 pub struct Composer {
     widgets: Vec<Box<dyn Widget>>,
     surfaces: Surfaces,
+}
+
+pub enum EventResult {
+    Ignored(Option<Callback>),
+    Consumed(Option<Callback>),
+}
+
+impl EventResult {
+    pub fn ignored() -> Self {
+        Self::Ignored(None)
+    }
+
+    pub fn consumed() -> Self {
+        Self::Consumed(None)
+    }
+
+    pub fn callback<C: FnOnce(&mut Composer, &mut Editor) + 'static>(
+        mut self,
+        callback: C,
+    ) -> Self {
+        let callback = Box::new(callback);
+
+        match self {
+            EventResult::Ignored(ref mut c) => *c = Some(callback),
+            EventResult::Consumed(ref mut c) => *c = Some(callback),
+        }
+
+        self
+    }
 }
 
 impl Composer {
@@ -32,17 +80,52 @@ impl Composer {
         self.surfaces.surface_mut()
     }
 
-    pub fn render<C: Canvas>(&mut self, canvas: &mut C) -> anyhow::Result<()> {
+    pub fn render<C: Canvas>(
+        &mut self,
+        canvas: &mut C,
+        ctx: &mut Context<'_>,
+    ) -> anyhow::Result<()> {
         let current_surface = self.surfaces.surface_mut();
         let area = current_surface.area;
 
         for w in &self.widgets {
-            w.draw(area, current_surface)?;
+            w.draw(area, current_surface, ctx);
         }
 
         self.surfaces.render(canvas)?;
 
         Ok(())
+    }
+
+    pub fn handle_event(&mut self, event: Event, ctx: &mut Context) -> bool {
+        let mut consumed = false;
+        let mut callbacks = Vec::new();
+
+        for widget in self.widgets.iter_mut().rev() {
+            match widget.handle_event(event, ctx) {
+                EventResult::Consumed(Some(cb)) => {
+                    consumed = true;
+                    callbacks.push(cb);
+                }
+                EventResult::Consumed(None) => {
+                    consumed = true;
+                }
+                EventResult::Ignored(Some(cb)) => {
+                    callbacks.push(cb);
+                }
+                EventResult::Ignored(None) => {}
+            }
+
+            if consumed {
+                break;
+            }
+        }
+
+        for callback in callbacks {
+            callback(self, ctx.editor);
+        }
+
+        consumed
     }
 
     pub fn push_widget<W: Widget + 'static>(&mut self, widget: W) {

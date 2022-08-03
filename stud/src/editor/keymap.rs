@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use cascade::cascade;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::{command::Command, Editor};
+use super::command::{Command, CommandCallback};
+use crate::command;
+
+use super::command::{close, dummy};
 
 #[derive(Debug)]
 pub struct Keymap(
@@ -17,6 +20,19 @@ impl Keymap {
         self.0.get(&event)
     }
 
+    pub fn register_simple_mapping(
+        &mut self,
+        mapping: &[u8],
+        command_fn: CommandCallback,
+    ) -> &mut Self {
+        for ch in mapping.iter() {
+            debug_assert!(
+                ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() || ch.is_ascii_punctuation()
+            )
+        }
+        self
+    }
+
     /// used for tests
     ///
     /// defined input paths:
@@ -24,7 +40,7 @@ impl Keymap {
     /// x
     /// g - a - c
     /// g - z
-    pub fn xd(command_dummy: Command) -> Self {
+    pub fn xd() -> Self {
         let k = |c: char| KeyEvent {
             code: KeyCode::Char(c),
             modifiers: KeyModifiers::empty(),
@@ -32,14 +48,15 @@ impl Keymap {
 
         Self(cascade! {
             HashMap::new();
-            ..insert(k('x'), KeymapTreeElement::Leaf(command_dummy.clone()));
+            ..insert(k('q'), KeymapTreeElement::Leaf(command!(close)));
+            ..insert(k('x'), KeymapTreeElement::Leaf(command!(dummy)));
             ..insert(k('g'), KeymapTreeElement::Node(Self(cascade! {
                 HashMap::new();
                 ..insert(k('a'), KeymapTreeElement::Node(Self(cascade! {
                     HashMap::new();
-                    ..insert(k('c'), KeymapTreeElement::Leaf(command_dummy.clone()));
+                    ..insert(k('c'), KeymapTreeElement::Leaf(command!(dummy)));
                 })));
-                ..insert(k('z'), KeymapTreeElement::Leaf(command_dummy));
+                ..insert(k('z'), KeymapTreeElement::Leaf(command!(dummy)));
             })));
         })
     }
@@ -60,7 +77,7 @@ mod test {
     #[test]
     fn test_keymap() {
         let cmd = Command::new("dummy", dummy);
-        let keymap = Keymap::xd(cmd);
+        let keymap = Keymap::xd();
         println!("Keymap {keymap:?}");
     }
 }

@@ -90,6 +90,7 @@ impl Document {
     }
 }
 
+#[allow(unused)]
 pub struct FilesystemMetadata {
     path: PathBuf,
     writable: bool,

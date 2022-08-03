@@ -1,3 +1,5 @@
+use std::ops::{Index, IndexMut};
+
 use stud_core::shapes::{Point, Rect};
 use unicode_width::UnicodeWidthStr;
 
@@ -123,5 +125,19 @@ impl Surface {
         }
 
         updates
+    }
+}
+
+impl Index<usize> for Surface {
+    type Output = Cell;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.content[index]
+    }
+}
+
+impl IndexMut<usize> for Surface {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.content[index]
     }
 }

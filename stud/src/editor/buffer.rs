@@ -8,7 +8,7 @@ use std::{
     },
 };
 
-use super::{Editor, Keymap, Mode};
+use super::{Keymap, Mode};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BufferId(NonZeroUsize);
@@ -56,20 +56,6 @@ impl Buffer {
     #[inline]
     pub fn document_id(&self) -> DocumentId {
         self.document_id
-    }
-
-    pub fn document<'a>(&self, editor: &'a Editor) -> &'a Document {
-        editor
-            .documents
-            .get(&self.document_id())
-            .expect("document removed from editor")
-    }
-
-    pub fn document_mut<'a>(&self, editor: &'a mut Editor) -> &'a mut Document {
-        editor
-            .documents
-            .get_mut(&self.document_id())
-            .expect("document removed from editor")
     }
 
     pub fn keymap(&self) -> &Keymap {

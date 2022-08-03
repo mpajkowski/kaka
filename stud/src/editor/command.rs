@@ -1,9 +1,10 @@
 use std::{borrow::Cow, fmt::Debug};
 
-use super::Editor;
-use crate::gui::Composer;
+use stud_core::ropey::Rope;
 
-pub type CommandCallback = fn(&mut Editor, &mut Composer);
+use super::Editor;
+
+pub type CommandCallback = fn(&mut Editor);
 
 #[derive(Clone)]
 pub struct Command {
@@ -19,8 +20,8 @@ impl Command {
         }
     }
 
-    pub fn call(&self, editor: &mut Editor, composer: &mut Composer) {
-        (self.fun)(editor, composer)
+    pub fn call(&self, editor: &mut Editor) {
+        (self.fun)(editor)
     }
 }
 
@@ -31,4 +32,19 @@ impl Debug for Command {
 }
 
 // Commands
-pub fn dummy(_: &mut Editor, c: &mut Composer) {}
+pub fn dummy(e: &mut Editor) {
+    let (_, doc) = e.current_buffer_and_doc();
+    doc.text_mut().append("a".into())
+}
+
+pub fn close(editor: &mut Editor) {
+    editor.exit_code = Some(0);
+}
+
+#[macro_export]
+macro_rules! command {
+    ($fun: ident) => {{
+        let name = stringify!($fun);
+        Command::new(name, $fun)
+    }};
+}
