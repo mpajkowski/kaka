@@ -3,10 +3,8 @@ use std::collections::HashMap;
 use cascade::cascade;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::command::{Command, CommandCallback};
+use super::command::*;
 use crate::command;
-
-use super::command::{close, dummy};
 
 #[derive(Debug)]
 pub struct Keymap(
@@ -41,15 +39,11 @@ impl Keymap {
     /// g - a - c
     /// g - z
     pub fn xd() -> Self {
-        let k = |c: char| KeyEvent {
-            code: KeyCode::Char(c),
-            modifiers: KeyModifiers::empty(),
-        };
-
         Self(cascade! {
             HashMap::new();
             ..insert(k('q'), KeymapTreeElement::Leaf(command!(close)));
             ..insert(k('x'), KeymapTreeElement::Leaf(command!(dummy)));
+            ..insert(k('i'), KeymapTreeElement::Leaf(command!(enter_insert_mode)));
             ..insert(k('g'), KeymapTreeElement::Node(Self(cascade! {
                 HashMap::new();
                 ..insert(k('a'), KeymapTreeElement::Node(Self(cascade! {
@@ -59,6 +53,23 @@ impl Keymap {
                 ..insert(k('z'), KeymapTreeElement::Leaf(command!(dummy)));
             })));
         })
+    }
+
+    pub fn insert_mode() -> Self {
+        let esc = KeyEvent {
+            code: KeyCode::Esc,
+            modifiers: KeyModifiers::NONE,
+        };
+        let mut map = HashMap::new();
+        map.insert(esc, KeymapTreeElement::Leaf(command!(enter_xd_mode)));
+        Self(map)
+    }
+}
+
+fn k(c: char) -> KeyEvent {
+    KeyEvent {
+        code: KeyCode::Char(c),
+        modifiers: KeyModifiers::empty(),
     }
 }
 

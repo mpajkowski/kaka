@@ -1,4 +1,4 @@
-use crossterm::event::{Event, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
 use stud_core::shapes::Rect;
 
 use super::{widget::Widget, Context, EventResult};
@@ -74,17 +74,27 @@ impl Widget for EditorWidget {
     }
 
     fn handle_event(&mut self, event: Event, ctx: &mut Context) -> super::EventResult {
-        let (buf, _) = ctx.current_buffer_and_doc();
+        let (buf, doc) = ctx.current_buffer_and_doc();
 
         let key_event = match event {
             Event::Key(ev) => ev,
             _ => return EventResult::ignored(),
         };
 
+        if buf.mode().name() == "insert" {}
+
         let command = self.find_command(buf, key_event);
 
         if let Some(command) = command {
             command.call(ctx.editor)
+        } else if buf.mode().name() == "insert" {
+            if let KeyCode::Char(c) = key_event.code {
+                if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                    doc.text_mut().append(c.to_uppercase().to_string().into())
+                } else {
+                    doc.text_mut().append(c.to_string().into());
+                }
+            }
         }
 
         EventResult::Consumed(None)

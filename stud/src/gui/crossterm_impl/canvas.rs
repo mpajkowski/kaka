@@ -40,6 +40,7 @@ impl<T: Write> CrosstermCanvas<T> {
         };
 
         this.set_cursor(start_point)?;
+        this.clear()?;
         this.flush()?;
 
         Ok(this)
@@ -77,8 +78,8 @@ impl<T: Write> Canvas for CrosstermCanvas<T> {
         for (point, cell) in cells {
             if prev_point != Some(Point::new(point.x + 1, point.y)) {
                 queue!(self.writer, MoveTo(point.x, point.y))?;
+                prev_point = Some(point);
             }
-            prev_point = Some(point);
 
             if cell.modifier != modifier {
                 let diff = ModifierDiff {

@@ -58,6 +58,14 @@ impl Buffer {
         self.document_id
     }
 
+    pub fn mode(&self) -> &Mode {
+        &self.mode
+    }
+
+    pub fn set_mode(&mut self, mode: Arc<Mode>) {
+        self.mode = mode;
+    }
+
     pub fn keymap(&self) -> &Keymap {
         self.mode.keymap()
     }

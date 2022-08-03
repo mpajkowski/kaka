@@ -28,13 +28,11 @@ pub struct Editor {
 impl Editor {
     pub fn init() -> Self {
         let mut mode_registry = ModeRegistry::default();
-        mode_registry.register(Mode::new("cluncky", Keymap::xd()));
+        mode_registry.register(Mode::new("xd", Keymap::xd()));
+        mode_registry.register(Mode::new("insert", Keymap::insert_mode()));
         let scratch_document = Document::new_scratch();
 
-        let init_buffer = Buffer::new(
-            mode_registry.mode_by_name("cluncky").unwrap(),
-            &scratch_document,
-        );
+        let init_buffer = Buffer::new(mode_registry.mode_by_name("xd").unwrap(), &scratch_document);
         let init_buffer_id = init_buffer.id();
 
         Self {
@@ -65,6 +63,12 @@ impl Editor {
                 (buf, doc)
             })
             .unwrap()
+    }
+
+    pub fn assign_mode(&mut self, buffer_id: BufferId, mode: &str) -> Option<()> {
+        let mode = self.mode_registry.mode_by_name(mode)?;
+        let mut buf = self.buffers.get_mut(&buffer_id).unwrap().set_mode(mode);
+        Some(())
     }
 
     pub fn should_exit(&self) -> bool {

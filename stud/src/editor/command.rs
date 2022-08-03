@@ -41,6 +41,20 @@ pub fn close(editor: &mut Editor) {
     editor.exit_code = Some(0);
 }
 
+pub fn enter_insert_mode(editor: &mut Editor) {
+    enter_mode_impl(editor, "insert")
+}
+
+pub fn enter_xd_mode(editor: &mut Editor) {
+    enter_mode_impl(editor, "xd")
+}
+
+fn enter_mode_impl(editor: &mut Editor, mode: &str) {
+    let mode = editor.mode_registry.mode_by_name(mode).unwrap();
+    let (buf, _) = editor.current_buffer_and_doc();
+    buf.set_mode(mode);
+}
+
 #[macro_export]
 macro_rules! command {
     ($fun: ident) => {{
