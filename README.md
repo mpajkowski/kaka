@@ -1,7 +1,9 @@
 # kaka
 (An attempt to write) a modal text editor.
 
-# Project assumptions
+_NOTE_: The project is very young and certainly not ready for use.
+
+# Current project goals
 
 - keymap and modes akin to `vim`
 - interaction via special buffers (e.g. tree explorers, terminals, etc.) is done with keymaps specific to them.
