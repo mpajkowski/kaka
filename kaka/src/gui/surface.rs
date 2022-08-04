@@ -1,6 +1,6 @@
 use std::ops::{Index, IndexMut};
 
-use stud_core::shapes::{Point, Rect};
+use kaka_core::shapes::{Point, Rect};
 use unicode_width::UnicodeWidthStr;
 
 use super::{style::Style, Color, Modifier};

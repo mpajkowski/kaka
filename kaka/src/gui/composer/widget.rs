@@ -1,5 +1,5 @@
 use crossterm::event::Event;
-use stud_core::shapes::Rect;
+use kaka_core::shapes::Rect;
 
 use crate::gui::surface::Surface;
 

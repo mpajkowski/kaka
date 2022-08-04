@@ -116,6 +116,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "kaka"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "cascade",
+ "crossterm",
+ "futures-util",
+ "kaka-core",
+ "rand",
+ "thiserror",
+ "tokio",
+ "unicode-segmentation",
+ "unicode-width",
+]
+
+[[package]]
+name = "kaka-core"
+version = "0.1.0"
+dependencies = [
+ "bitflags",
+ "ropey",
+ "thiserror",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.126"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -342,32 +368,6 @@ name = "str_indices"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d9199fa80c817e074620be84374a520062ebac833f358d74b37060ce4a0f2c0"
-
-[[package]]
-name = "stud"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bitflags",
- "cascade",
- "crossterm",
- "futures-util",
- "rand",
- "stud-core",
- "thiserror",
- "tokio",
- "unicode-segmentation",
- "unicode-width",
-]
-
-[[package]]
-name = "stud-core"
-version = "0.1.0"
-dependencies = [
- "bitflags",
- "ropey",
- "thiserror",
-]
 
 [[package]]
 name = "syn"

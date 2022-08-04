@@ -9,7 +9,7 @@ pub use buffer::{Buffer, BufferId};
 use crossterm::event::KeyEvent;
 pub use keymap::{Keymap, KeymapTreeElement};
 pub use mode::{Mode, Registry as ModeRegistry};
-use stud_core::{Document, DocumentId};
+use kaka_core::{Document, DocumentId};
 
 pub use self::command::Command;
 

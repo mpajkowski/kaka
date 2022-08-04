@@ -1,4 +1,4 @@
-use stud_core::{Document, DocumentId};
+use kaka_core::{Document, DocumentId};
 
 use std::{
     num::NonZeroUsize,

@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use stud_core::shapes::{Point, Rect};
+use kaka_core::shapes::{Point, Rect};
 
 use super::Cell;
 

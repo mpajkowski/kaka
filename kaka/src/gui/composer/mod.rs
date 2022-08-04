@@ -4,7 +4,7 @@ mod widget;
 use crossterm::event::Event;
 pub use editor::EditorWidget;
 
-use stud_core::{shapes::Rect, Document};
+use kaka_core::{shapes::Rect, Document};
 
 use crate::{
     editor::{Buffer, Editor},

@@ -1,5 +1,5 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use stud_core::shapes::Rect;
+use kaka_core::shapes::Rect;
 
 use super::{widget::Widget, Context, EventResult};
 use crate::{

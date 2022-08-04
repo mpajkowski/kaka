@@ -12,7 +12,7 @@ use crossterm::{
     ExecutableCommand,
 };
 
-use stud_core::shapes::{Point, Rect};
+use kaka_core::shapes::{Point, Rect};
 
 use crate::gui::{Canvas, Cell, Color, Modifier};
 
