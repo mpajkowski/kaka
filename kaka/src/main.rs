@@ -1,7 +1,8 @@
 mod app;
-mod editor;
 mod client;
+mod editor;
 mod jobs;
+mod macros;
 
 use std::io::{stdout, Stdout};
 

@@ -1,14 +1,12 @@
+use anyhow::{Context, Result};
 use kaka_core::{Document, DocumentId};
 
 use std::{
     num::NonZeroUsize,
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
+    sync::atomic::{AtomicUsize, Ordering},
 };
 
-use super::{Keymap, Mode};
+use super::Mode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct BufferId(NonZeroUsize);
@@ -27,25 +25,32 @@ impl BufferId {
     }
 }
 
-impl Default for BufferId {
-    fn default() -> Self {
-        Self(unsafe { NonZeroUsize::new_unchecked(1) })
-    }
-}
-
 pub struct Buffer {
     id: BufferId,
     document_id: DocumentId,
-    mode: Arc<Mode>,
+    avail_modes: Vec<Mode>,
+    current_mode: usize,
 }
 
 impl Buffer {
-    pub fn new(mode: Arc<Mode>, document: &Document) -> Self {
-        Self {
+    pub fn new_text_buffer(document: &Document) -> Self {
+        Self::new([Mode::Xd, Mode::Insert], document, &Mode::Xd).unwrap()
+    }
+
+    pub fn new(
+        avail_modes: impl IntoIterator<Item = Mode>,
+        document: &Document,
+        start_mode: &Mode,
+    ) -> Result<Self> {
+        let mut this = Self {
             id: BufferId::next(),
             document_id: document.id(),
-            mode,
-        }
+            avail_modes: avail_modes.into_iter().collect(),
+            current_mode: 0,
+        };
+        this.set_mode_impl(start_mode.name())?;
+
+        Ok(this)
     }
 
     #[inline]
@@ -59,14 +64,23 @@ impl Buffer {
     }
 
     pub fn mode(&self) -> &Mode {
-        &self.mode
+        &self.avail_modes[self.current_mode]
     }
 
-    pub fn set_mode(&mut self, mode: Arc<Mode>) {
-        self.mode = mode;
+    pub fn set_mode(&mut self, mode: &str) {
+        // ignore error for now
+        self.set_mode_impl(mode).ok();
     }
 
-    pub fn keymap(&self) -> &Keymap {
-        self.mode.keymap()
+    fn set_mode_impl(&mut self, mode: &str) -> Result<()> {
+        let mode_pos = self
+            .avail_modes
+            .iter()
+            .position(|m| m.name() == mode)
+            .with_context(|| format!("Buffer is not capable to enter {mode}"))?;
+
+        self.current_mode = mode_pos;
+
+        Ok(())
     }
 }

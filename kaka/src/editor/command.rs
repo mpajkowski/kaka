@@ -1,5 +1,7 @@
 use std::{borrow::Cow, fmt::Debug};
 
+use crate::current_mut;
+
 use super::Editor;
 
 pub type CommandCallback = fn(&mut Editor);
@@ -31,7 +33,7 @@ impl Debug for Command {
 
 // Commands
 pub fn dummy(e: &mut Editor) {
-    let (_, doc) = e.current_buffer_and_doc();
+    let (_, doc) = current_mut!(e);
     doc.text_mut().append("a".into())
 }
 
@@ -48,8 +50,7 @@ pub fn enter_xd_mode(editor: &mut Editor) {
 }
 
 fn enter_mode_impl(editor: &mut Editor, mode: &str) {
-    let mode = editor.mode_registry.mode_by_name(mode).unwrap();
-    let (buf, _) = editor.current_buffer_and_doc();
+    let (buf, _) = current_mut!(editor);
     buf.set_mode(mode);
 }
 

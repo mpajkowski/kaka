@@ -4,12 +4,9 @@ mod widget;
 use crossterm::event::Event;
 pub use editor::EditorWidget;
 
-use kaka_core::{shapes::Rect, Document};
+use kaka_core::shapes::Rect;
 
-use crate::{
-    editor::{Buffer, Editor},
-    jobs::Jobs,
-};
+use crate::{editor::Editor, jobs::Jobs};
 
 use self::widget::Widget;
 
@@ -20,12 +17,6 @@ pub type Callback = Box<dyn FnOnce(&mut Composer, &mut Editor)>;
 pub struct Context<'a> {
     pub editor: &'a mut Editor,
     pub jobs: &'a mut Jobs,
-}
-
-impl<'a> Context<'a> {
-    pub fn current_buffer_and_doc(&mut self) -> (&mut Buffer, &mut Document) {
-        self.editor.current_buffer_and_doc()
-    }
 }
 
 pub struct Composer {

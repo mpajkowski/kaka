@@ -7,30 +7,32 @@ use std::collections::HashMap;
 
 pub use buffer::{Buffer, BufferId};
 use crossterm::event::KeyEvent;
-pub use keymap::{Keymap, KeymapTreeElement};
-pub use mode::{Mode, Registry as ModeRegistry};
 use kaka_core::{Document, DocumentId};
+pub use keymap::{Keymap, KeymapTreeElement};
+pub use mode::Mode;
 
 pub use self::command::Command;
+pub use self::keymap::Keymaps;
 
 /// Holds editor state
 pub struct Editor {
     pub buffers: HashMap<BufferId, Buffer>,
     pub documents: HashMap<DocumentId, Document>,
     pub current: BufferId,
-    pub mode_registry: ModeRegistry,
     pub buffered_keys: Vec<KeyEvent>,
     pub exit_code: Option<i32>,
+    pub keymaps: Keymaps,
 }
 
 impl Editor {
     pub fn init() -> Self {
-        let mut mode_registry = ModeRegistry::default();
-        mode_registry.register(Mode::new("xd", Keymap::xd()));
-        mode_registry.register(Mode::new("insert", Keymap::insert_mode()));
+        let mut keymaps = Keymaps::default();
+        keymaps.register_keymap_for_mode(&Mode::Xd, Keymap::xd());
+        keymaps.register_keymap_for_mode(&Mode::Insert, Keymap::insert_mode());
+
         let scratch_document = Document::new_scratch();
 
-        let init_buffer = Buffer::new(mode_registry.mode_by_name("xd").unwrap(), &scratch_document);
+        let init_buffer = Buffer::new_text_buffer(&scratch_document);
         let init_buffer_id = init_buffer.id();
 
         Self {
@@ -45,22 +47,10 @@ impl Editor {
                 documents
             },
             current: init_buffer_id,
-            mode_registry,
             buffered_keys: Vec::new(),
             exit_code: None,
+            keymaps,
         }
-    }
-
-    pub fn current_buffer_and_doc(&mut self) -> (&mut Buffer, &mut Document) {
-        self.buffers
-            .get_mut(&self.current)
-            .map(|buf| {
-                let doc_id = buf.document_id();
-                let doc = self.documents.get_mut(&doc_id).unwrap();
-
-                (buf, doc)
-            })
-            .unwrap()
     }
 
     pub fn should_exit(&self) -> bool {

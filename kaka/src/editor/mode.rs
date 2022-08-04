@@ -1,44 +1,37 @@
-use super::Keymap;
+use crossterm::event::KeyEvent;
 
-use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use std::fmt::Debug;
 
 #[derive(Debug)]
-pub struct Mode {
-    name: Cow<'static, str>,
-    keymap: Keymap,
+pub enum Mode {
+    Xd,
+    Insert,
+    Custom(Box<dyn CustomModeType>),
 }
 
 impl Mode {
-    #[must_use]
-    pub fn new(name: impl Into<Cow<'static, str>>, keymap: Keymap) -> Self {
-        Self {
-            name: name.into(),
-            keymap,
-        }
+    pub fn custom<M: CustomModeType + 'static>(mode: M) -> Self {
+        Self::Custom(Box::new(mode))
+    }
+
+    pub fn is_insert(&self) -> bool {
+        matches!(self, Self::Insert)
+    }
+
+    pub fn is_xd(&self) -> bool {
+        matches!(self, Self::Xd)
     }
 
     pub fn name(&self) -> &str {
-        &self.name
-    }
-
-    pub fn keymap(&self) -> &Keymap {
-        &self.keymap
+        match self {
+            Self::Xd => "xd",
+            Self::Insert => "insert",
+            Self::Custom(c) => c.name(),
+        }
     }
 }
 
-#[derive(Debug, Default)]
-pub struct Registry {
-    modes: HashMap<String, Arc<Mode>>,
-}
-
-impl Registry {
-    pub fn register(&mut self, mode: Mode) {
-        let k = mode.name.to_string();
-
-        self.modes.insert(k, Arc::new(mode));
-    }
-
-    pub fn mode_by_name(&self, k: &str) -> Option<Arc<Mode>> {
-        self.modes.get(k).cloned()
-    }
+pub trait CustomModeType: Debug {
+    fn name(&self) -> &str;
+    fn on_key(&self, key_event: KeyEvent);
 }

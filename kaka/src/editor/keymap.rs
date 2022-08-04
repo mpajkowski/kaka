@@ -1,10 +1,29 @@
 use std::collections::HashMap;
 
+use anyhow::Context;
 use cascade::cascade;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
-use super::command::*;
+use super::{command::*, Mode};
 use crate::command;
+
+#[derive(Debug, Default)]
+pub struct Keymaps {
+    keymaps: HashMap<String, Keymap>,
+}
+
+impl Keymaps {
+    pub fn register_keymap_for_mode(&mut self, mode: &Mode, keymap: Keymap) -> Option<Keymap> {
+        self.keymaps.insert(mode.name().to_string(), keymap)
+    }
+
+    pub fn keymap_for_mode(&self, mode: &Mode) -> anyhow::Result<&Keymap> {
+        let mode = mode.name();
+        self.keymaps
+            .get(mode)
+            .with_context(|| format!("Keymap for mode {mode} not registered"))
+    }
+}
 
 #[derive(Debug)]
 pub struct Keymap(
