@@ -15,8 +15,9 @@ use anyhow::Result;
 use crate::editor::Editor;
 use crate::jobs::Jobs;
 
-use self::canvas::Canvas;
 use self::composer::Context;
+
+pub use self::canvas::Canvas;
 
 pub struct Client<C> {
     canvas: C,

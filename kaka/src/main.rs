@@ -4,12 +4,13 @@ mod editor;
 mod jobs;
 mod macros;
 
-use std::io::{stdout, Stdout};
+use std::io::stdout;
 
 use app::App;
+use client::Client;
 use crossterm::event::EventStream;
 
-pub type Client = client::Client<client::CrosstermCanvas<Stdout>>;
+pub use client::Canvas;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

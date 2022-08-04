@@ -1,38 +1,40 @@
-use std::{fmt::Write, io};
+use std::{fmt::Write, io, marker::PhantomData};
 
 use crossterm::event::Event;
 use futures_util::{Stream, StreamExt};
 
 use crate::{
-    editor::Editor,
     client::EditorWidget,
+    editor::Editor,
     jobs::{Jobs, Outcome},
+    Canvas,
 };
 
 use crate::Client;
 
-pub struct App {
+pub struct App<C, E> {
     jobs: Jobs,
-    client: Client,
+    client: Client<C>,
     logs: String,
     editor: Editor,
+    e: PhantomData<E>,
 }
 
-impl App {
-    pub fn new(client: Client) -> Self {
+impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin> App<C, E> {
+    pub fn new(client: Client<C>) -> Self {
         Self {
             client,
             jobs: Jobs::default(),
             logs: String::new(),
             editor: Editor::init(),
+            e: PhantomData,
         }
     }
 
-    pub async fn run(
-        &mut self,
-        term_events: &mut (impl Stream<Item = Result<Event, io::Error>> + Unpin),
-    ) -> anyhow::Result<()> {
-        self.client.composer_mut().push_widget(EditorWidget::default());
+    pub async fn run(&mut self, term_events: &mut E) -> anyhow::Result<()> {
+        self.client
+            .composer_mut()
+            .push_widget(EditorWidget::default());
 
         loop {
             let should_redraw = tokio::select! {
