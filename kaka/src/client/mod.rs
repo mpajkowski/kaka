@@ -18,12 +18,12 @@ use crate::jobs::Jobs;
 use self::canvas::Canvas;
 use self::composer::Context;
 
-pub struct Gui<C> {
+pub struct Client<C> {
     canvas: C,
     composer: Composer,
 }
 
-impl<C: Canvas> Gui<C> {
+impl<C: Canvas> Client<C> {
     pub fn new(canvas: C) -> Self {
         let dims = canvas.shape();
         let composer = Composer::new(dims);

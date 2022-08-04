@@ -1,7 +1,7 @@
 use crossterm::event::Event;
 use kaka_core::shapes::Rect;
 
-use crate::gui::surface::Surface;
+use crate::client::surface::Surface;
 
 use super::{Context, EventResult};
 

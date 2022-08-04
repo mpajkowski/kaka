@@ -4,7 +4,7 @@ use kaka_core::shapes::Rect;
 use super::{widget::Widget, Context, EventResult};
 use crate::{
     editor::{Buffer, Command, KeymapTreeElement},
-    gui::{surface::Surface, Color},
+    client::{surface::Surface, Color},
 };
 
 #[derive(Default)]

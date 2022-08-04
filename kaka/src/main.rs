@@ -1,6 +1,6 @@
 mod app;
 mod editor;
-mod gui;
+mod client;
 mod jobs;
 
 use std::io::{stdout, Stdout};
@@ -8,14 +8,14 @@ use std::io::{stdout, Stdout};
 use app::App;
 use crossterm::event::EventStream;
 
-pub type Gui = gui::Gui<gui::CrosstermCanvas<Stdout>>;
+pub type Client = client::Client<client::CrosstermCanvas<Stdout>>;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let crossterm_canvas = gui::CrosstermCanvas::new(stdout(), true)?;
-    let gui = Gui::new(crossterm_canvas);
+    let crossterm_canvas = client::CrosstermCanvas::new(stdout(), true)?;
+    let client = Client::new(crossterm_canvas);
 
-    let mut app = App::new(gui);
+    let mut app = App::new(client);
     app.run(&mut EventStream::new()).await?;
 
     Ok(())

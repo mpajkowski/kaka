@@ -5,23 +5,23 @@ use futures_util::{Stream, StreamExt};
 
 use crate::{
     editor::Editor,
-    gui::EditorWidget,
+    client::EditorWidget,
     jobs::{Jobs, Outcome},
 };
 
-use crate::Gui;
+use crate::Client;
 
 pub struct App {
     jobs: Jobs,
-    gui: Gui,
+    client: Client,
     logs: String,
     editor: Editor,
 }
 
 impl App {
-    pub fn new(gui: Gui) -> Self {
+    pub fn new(client: Client) -> Self {
         Self {
-            gui,
+            client,
             jobs: Jobs::default(),
             logs: String::new(),
             editor: Editor::init(),
@@ -32,7 +32,7 @@ impl App {
         &mut self,
         term_events: &mut (impl Stream<Item = Result<Event, io::Error>> + Unpin),
     ) -> anyhow::Result<()> {
-        self.gui.composer_mut().push_widget(EditorWidget::default());
+        self.client.composer_mut().push_widget(EditorWidget::default());
 
         loop {
             let should_redraw = tokio::select! {
@@ -61,7 +61,7 @@ impl App {
     fn on_term_event(&mut self, event: Event) -> bool {
         let _ = writeln!(self.logs, "event: {event:?}");
 
-        self.gui
+        self.client
             .handle_event(event, &mut self.editor, &mut self.jobs)
     }
 
@@ -72,6 +72,6 @@ impl App {
     }
 
     fn render(&mut self) -> anyhow::Result<()> {
-        self.gui.render(&mut self.editor, &mut self.jobs)
+        self.client.render(&mut self.editor, &mut self.jobs)
     }
 }
