@@ -11,7 +11,7 @@ impl Rect {
 
     pub fn new(left_x: u16, left_y: u16, mut width: u16, mut height: u16) -> Self {
         let width_u32 = width as u32;
-        let height_u32 = width as u32;
+        let height_u32 = height as u32;
 
         if width_u32 * height_u32 > Self::MAX_AREA as u32 {
             let aspect_ratio = width as f32 / height as f32;

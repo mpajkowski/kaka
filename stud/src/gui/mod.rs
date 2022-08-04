@@ -37,6 +37,10 @@ impl<C: Canvas> Gui<C> {
     }
 
     pub fn handle_event(&mut self, event: Event, editor: &mut Editor, jobs: &mut Jobs) -> bool {
+        if matches!(event, Event::Resize(_, _)) {
+            let _ = self.canvas.clear();
+        }
+
         let mut ctx = Context { editor, jobs };
         self.composer.handle_event(event, &mut ctx)
     }

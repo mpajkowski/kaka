@@ -27,6 +27,7 @@ pub struct CrosstermCanvas<T> {
 impl<T: Write> CrosstermCanvas<T> {
     pub fn new(writer: T, setup_environment: bool) -> Result<Self> {
         let (width, height) = crossterm::terminal::size()?;
+        println!("size: {:?}", (width, height));
         let start_point = Point::new(0, 0);
 
         if setup_environment {
@@ -70,16 +71,17 @@ impl<T: Write> Canvas for CrosstermCanvas<T> {
     }
 
     fn draw<'a, I: Iterator<Item = (Point, &'a Cell)>>(&mut self, cells: I) -> Result<()> {
-        let mut prev_point = None;
+        let mut prev_point: Option<Point> = None;
         let mut fg = Color::Reset;
         let mut bg = Color::Reset;
         let mut modifier = Modifier::empty();
 
         for (point, cell) in cells {
-            if prev_point != Some(Point::new(point.x + 1, point.y)) {
+            if !matches!(prev_point, Some(p) if point.x == p.x +1 && point.y == p.y) {
                 queue!(self.writer, MoveTo(point.x, point.y))?;
-                prev_point = Some(point);
+                //println!("move to {point:?}");
             }
+            prev_point = Some(point);
 
             if cell.modifier != modifier {
                 let diff = ModifierDiff {
@@ -103,7 +105,12 @@ impl<T: Write> Canvas for CrosstermCanvas<T> {
             queue!(self.writer, Print(&cell.symbol))?;
         }
 
-        self.writer.flush()?;
+        queue!(
+            self.writer,
+            SetForegroundColor(CColor::Reset),
+            SetBackgroundColor(CColor::Reset),
+            SetAttribute(CAttribute::Reset)
+        )?;
 
         Ok(())
     }

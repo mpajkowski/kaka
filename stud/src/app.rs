@@ -65,8 +65,6 @@ impl App {
             .handle_event(event, &mut self.editor, &mut self.jobs)
     }
 
-
-
     fn on_job_outcome(&mut self, outcome: Outcome) -> bool {
         let _ = write!(self.logs, "outcome: {outcome:?}");
 

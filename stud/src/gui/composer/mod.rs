@@ -98,8 +98,16 @@ impl Composer {
     }
 
     pub fn handle_event(&mut self, event: Event, ctx: &mut Context) -> bool {
-        let mut consumed = false;
         let mut callbacks = Vec::new();
+
+        let mut consumed = false;
+
+        let resized = if let Event::Resize(x, y) = event {
+            self.surfaces.resize(Rect::new(0, 0, x, y));
+            true
+        } else {
+            false
+        };
 
         for widget in self.widgets.iter_mut().rev() {
             match widget.handle_event(event, ctx) {
@@ -125,7 +133,7 @@ impl Composer {
             callback(self, ctx.editor);
         }
 
-        consumed
+        consumed || resized
     }
 
     pub fn push_widget<W: Widget + 'static>(&mut self, widget: W) {
@@ -169,5 +177,10 @@ impl Surfaces {
         self.current_surface = 1 - self.current_surface;
 
         Ok(())
+    }
+
+    pub fn resize(&mut self, rect: Rect) {
+        self.surfaces[self.current_surface].resize(rect);
+        self.surfaces[1 - self.current_surface].resize(rect);
     }
 }

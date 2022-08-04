@@ -84,8 +84,11 @@ impl Surface {
     }
 
     pub fn resize(&mut self, area: Rect) {
-        self.area = area;
-        self.content.resize(area.area() as usize, Cell::default());
+        if self.area != area {
+            self.area = area;
+            self.content.resize(area.area() as usize, Cell::default());
+            self.reset();
+        }
     }
 
     pub fn filled(area: Rect, cell: &Cell) -> Self {
@@ -120,13 +123,13 @@ impl Surface {
             if (current != previous || invalidated > 0) && to_skip == 0 {
                 let x = i as u16 % width;
                 let y = i as u16 / width;
-                updates.push((Point::new(x, y), &next_buffer[i]));
+                updates.push((Point::new(x, y), current));
             }
 
             to_skip = current.symbol.width().saturating_sub(1);
 
-            let affected_width = std::cmp::max(current.symbol.width(), previous.symbol.width());
-            invalidated = std::cmp::max(affected_width, invalidated).saturating_sub(1);
+            let affected_width = current.symbol.width().max(previous.symbol.width());
+            invalidated = affected_width.max(invalidated).saturating_sub(1);
         }
 
         updates
