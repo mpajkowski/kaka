@@ -54,7 +54,7 @@ impl<T: Write> CrosstermCanvas<T> {
             stdout.execute(LeaveAlternateScreen).ok();
             crossterm::terminal::disable_raw_mode().ok();
 
-            hook(info)
+            hook(info);
         }));
     }
 }
@@ -143,25 +143,19 @@ impl<T: Write> Canvas for CrosstermCanvas<T> {
 impl From<Color> for CColor {
     fn from(c: Color) -> Self {
         match c {
-            Color::Reset => CColor::Reset,
-            Color::Black => CColor::Black,
-            Color::Red => CColor::Red,
-            Color::Green => CColor::Green,
-            Color::Yellow => CColor::Yellow,
-            Color::Blue => CColor::Blue,
-            Color::Magenta => CColor::Magenta,
-            Color::Cyan => CColor::Cyan,
-            Color::Gray => CColor::Grey,
-            Color::DarkGray => CColor::DarkGrey,
-            Color::LightRed => CColor::Red,
-            Color::LightGreen => CColor::Green,
-            Color::LightYellow => CColor::Yellow,
-            Color::LightBlue => CColor::Blue,
-            Color::LightMagenta => CColor::Magenta,
-            Color::LightCyan => CColor::Cyan,
-            Color::White => CColor::White,
-            Color::Rgb(r, g, b) => CColor::Rgb { r, g, b },
-            Color::Indexed(i) => CColor::AnsiValue(i),
+            Color::Reset => Self::Reset,
+            Color::Black => Self::Black,
+            Color::Gray => Self::Grey,
+            Color::DarkGray => Self::DarkGrey,
+            Color::LightRed | Color::Red => Self::Red,
+            Color::LightGreen | Color::Green => Self::Green,
+            Color::LightYellow | Color::Yellow => Self::Yellow,
+            Color::LightBlue | Color::Blue => Self::Blue,
+            Color::LightMagenta | Color::Magenta => Self::Magenta,
+            Color::LightCyan | Color::Cyan => Self::Cyan,
+            Color::White => Self::White,
+            Color::Rgb(r, g, b) => Self::Rgb { r, g, b },
+            Color::Indexed(i) => Self::AnsiValue(i),
         }
     }
 }

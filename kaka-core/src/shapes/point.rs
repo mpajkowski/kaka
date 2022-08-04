@@ -5,7 +5,7 @@ pub struct Point {
 }
 
 impl Point {
-    pub fn new(x: u16, y: u16) -> Self {
+    pub const fn new(x: u16, y: u16) -> Self {
         Self { x, y }
     }
 }

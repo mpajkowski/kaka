@@ -27,6 +27,6 @@ impl Drop for RawTerminalGuard {
             Ok::<_, std::io::Error>(())
         };
 
-        f().expect("Failed to restore terminal state")
+        f().expect("Failed to restore terminal state");
     }
 }

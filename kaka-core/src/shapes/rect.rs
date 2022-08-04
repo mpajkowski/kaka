@@ -32,23 +32,23 @@ impl Rect {
         }
     }
 
-    pub fn width(&self) -> u16 {
+    pub const fn width(&self) -> u16 {
         self.width
     }
 
-    pub fn height(&self) -> u16 {
+    pub const fn height(&self) -> u16 {
         self.height
     }
 
-    pub fn left_x(&self) -> u16 {
+    pub const fn left_x(&self) -> u16 {
         self.left_x
     }
 
-    pub fn left_y(&self) -> u16 {
+    pub const fn left_y(&self) -> u16 {
         self.left_y
     }
 
-    pub fn area(&self) -> u16 {
+    pub const fn area(&self) -> u16 {
         self.width * self.height
     }
 }

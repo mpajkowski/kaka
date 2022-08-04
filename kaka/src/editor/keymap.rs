@@ -37,7 +37,7 @@ impl Keymap {
         self.0.get(&event)
     }
 
-    pub fn register_simple_mapping(
+    pub fn _register_simple_mapping(
         &mut self,
         mapping: &[u8],
         _command_fn: CommandCallback,
@@ -45,7 +45,7 @@ impl Keymap {
         for ch in mapping.iter() {
             debug_assert!(
                 ch.is_ascii_alphanumeric() || ch.is_ascii_whitespace() || ch.is_ascii_punctuation()
-            )
+            );
         }
         todo!("Implement vim-like mapping parser")
     }
@@ -85,7 +85,7 @@ impl Keymap {
     }
 }
 
-fn k(c: char) -> KeyEvent {
+const fn k(c: char) -> KeyEvent {
     KeyEvent {
         code: KeyCode::Char(c),
         modifiers: KeyModifiers::empty(),

@@ -53,7 +53,7 @@ impl Editor {
         }
     }
 
-    pub fn should_exit(&self) -> bool {
+    pub const fn should_exit(&self) -> bool {
         self.exit_code.is_some()
     }
 }

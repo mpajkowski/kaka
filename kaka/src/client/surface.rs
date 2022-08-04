@@ -104,11 +104,11 @@ impl Surface {
 
     pub fn reset(&mut self) {
         for cell in &mut self.content {
-            cell.reset()
+            cell.reset();
         }
     }
 
-    pub(crate) fn diff<'a>(&self, other: &'a Surface) -> Vec<(Point, &'a Cell)> {
+    pub(crate) fn diff<'a>(&self, other: &'a Self) -> Vec<(Point, &'a Cell)> {
         let previous_buffer = &self.content;
         let next_buffer = &other.content;
         let width = self.area.width();

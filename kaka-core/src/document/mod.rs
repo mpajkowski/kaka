@@ -16,10 +16,7 @@ use ropey::Rope;
 pub struct DocumentId(NonZeroUsize);
 
 impl DocumentId {
-    pub fn inner(self) -> usize {
-        self.0.get()
-    }
-
+    #[must_use]
     pub fn next() -> Self {
         static IDS: AtomicUsize = AtomicUsize::new(1);
         Self(
@@ -45,6 +42,15 @@ impl Document {
         }
     }
 
+    /// Creates document from provided path
+    ///
+    /// # Returns
+    ///
+    /// `Document` with contents loaded from filesystem
+    ///
+    /// # Errors
+    ///
+    /// `io::Error` - file not found | lack of permissions
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
         let path = path.as_ref();
         let metadata = path.metadata()?;
@@ -69,11 +75,11 @@ impl Document {
         })
     }
 
-    pub fn is_scratch(&self) -> bool {
+    pub const fn is_scratch(&self) -> bool {
         self.fs_metadata.is_none()
     }
 
-    pub fn text(&self) -> &Rope {
+    pub const fn text(&self) -> &Rope {
         &self.text
     }
 
@@ -85,7 +91,7 @@ impl Document {
         self.fs_metadata.as_ref().map(|m| m.path.as_ref())
     }
 
-    pub fn id(&self) -> DocumentId {
+    pub const fn id(&self) -> DocumentId {
         self.id
     }
 }

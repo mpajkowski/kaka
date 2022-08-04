@@ -12,10 +12,6 @@ use super::Mode;
 pub struct BufferId(NonZeroUsize);
 
 impl BufferId {
-    pub fn inner(self) -> usize {
-        self.0.get()
-    }
-
     pub fn next() -> Self {
         pub static IDS: AtomicUsize = AtomicUsize::new(1);
         Self(
@@ -54,12 +50,12 @@ impl Buffer {
     }
 
     #[inline]
-    pub fn id(&self) -> BufferId {
+    pub const fn id(&self) -> BufferId {
         self.id
     }
 
     #[inline]
-    pub fn document_id(&self) -> DocumentId {
+    pub const fn document_id(&self) -> DocumentId {
         self.document_id
     }
 

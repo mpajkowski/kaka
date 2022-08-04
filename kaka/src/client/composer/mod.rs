@@ -38,6 +38,7 @@ impl EventResult {
         Self::Consumed(None)
     }
 
+    #[allow(unused)]
     pub fn callback<C: FnOnce(&mut Composer, &mut Editor) + 'static>(
         mut self,
         callback: C,
@@ -45,8 +46,9 @@ impl EventResult {
         let callback = Box::new(callback);
 
         match self {
-            EventResult::Ignored(ref mut c) => *c = Some(callback),
-            EventResult::Consumed(ref mut c) => *c = Some(callback),
+            EventResult::Consumed(ref mut c) | EventResult::Ignored(ref mut c) => {
+                *c = Some(callback);
+            }
         }
 
         self
@@ -61,14 +63,6 @@ impl Composer {
             surfaces,
             widgets: vec![],
         }
-    }
-
-    pub fn surface(&self) -> &Surface {
-        self.surfaces.surface()
-    }
-
-    pub fn surface_mut(&mut self) -> &mut Surface {
-        self.surfaces.surface_mut()
     }
 
     pub fn render<C: Canvas>(
@@ -128,7 +122,7 @@ impl Composer {
     }
 
     pub fn push_widget<W: Widget + 'static>(&mut self, widget: W) {
-        self.widgets.push(Box::new(widget))
+        self.widgets.push(Box::new(widget));
     }
 }
 
@@ -145,10 +139,6 @@ impl Surfaces {
             surfaces,
             current_surface: 0,
         }
-    }
-
-    pub fn surface(&self) -> &Surface {
-        &self.surfaces[self.current_surface]
     }
 
     pub fn surface_mut(&mut self) -> &mut Surface {

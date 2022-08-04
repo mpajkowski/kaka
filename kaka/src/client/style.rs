@@ -53,8 +53,8 @@ pub struct Style {
 }
 
 impl Default for Style {
-    fn default() -> Style {
-        Style {
+    fn default() -> Self {
+        Self {
             fg: None,
             bg: None,
             add_modifier: Modifier::empty(),
@@ -65,8 +65,8 @@ impl Default for Style {
 
 impl Style {
     /// Returns a `Style` resetting all properties.
-    pub fn reset() -> Style {
-        Style {
+    pub const fn reset() -> Self {
+        Self {
             fg: Some(Color::Reset),
             bg: Some(Color::Reset),
             add_modifier: Modifier::empty(),
@@ -75,13 +75,13 @@ impl Style {
     }
 
     /// Changes the foreground color.
-    pub fn fg(mut self, color: Color) -> Style {
+    pub const fn fg(mut self, color: Color) -> Self {
         self.fg = Some(color);
         self
     }
 
     /// Changes the background color.
-    pub fn bg(mut self, color: Color) -> Style {
+    pub const fn bg(mut self, color: Color) -> Self {
         self.bg = Some(color);
         self
     }
@@ -89,7 +89,7 @@ impl Style {
     /// Changes the text emphasis.
     ///
     /// When applied, it adds the given modifier to the `Style` modifiers.
-    pub fn add_modifier(mut self, modifier: Modifier) -> Style {
+    pub fn add_modifier(mut self, modifier: Modifier) -> Self {
         self.sub_modifier.remove(modifier);
         self.add_modifier.insert(modifier);
         self
@@ -98,7 +98,7 @@ impl Style {
     /// Changes the text emphasis.
     ///
     /// When applied, it removes the given modifier from the `Style` modifiers.
-    pub fn remove_modifier(mut self, modifier: Modifier) -> Style {
+    pub fn remove_modifier(mut self, modifier: Modifier) -> Self {
         self.add_modifier.remove(modifier);
         self.sub_modifier.insert(modifier);
         self
@@ -106,7 +106,7 @@ impl Style {
 
     /// Results in a combined style that is equivalent to applying the two individual styles to
     /// a style one after the other.
-    pub fn patch(mut self, other: Style) -> Style {
+    pub fn patch(mut self, other: Self) -> Self {
         self.fg = other.fg.or(self.fg);
         self.bg = other.bg.or(self.bg);
 

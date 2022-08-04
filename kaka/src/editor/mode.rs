@@ -6,20 +6,18 @@ use std::fmt::Debug;
 pub enum Mode {
     Xd,
     Insert,
+    #[allow(unused)]
     Custom(Box<dyn CustomModeType>),
 }
 
 impl Mode {
+    #[allow(unused)]
     pub fn custom<M: CustomModeType + 'static>(mode: M) -> Self {
         Self::Custom(Box::new(mode))
     }
 
-    pub fn is_insert(&self) -> bool {
+    pub const fn is_insert(&self) -> bool {
         matches!(self, Self::Insert)
-    }
-
-    pub fn is_xd(&self) -> bool {
-        matches!(self, Self::Xd)
     }
 
     pub fn name(&self) -> &str {

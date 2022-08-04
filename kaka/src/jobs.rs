@@ -22,6 +22,7 @@ pub struct Jobs {
 }
 
 impl Jobs {
+    #[allow(unused)]
     pub fn spawn<O: Into<Outcome>, F: Future<Output = Result<O>> + Send + 'static>(
         &mut self,
         future: F,

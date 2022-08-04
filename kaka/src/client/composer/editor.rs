@@ -23,11 +23,10 @@ impl EditorWidget {
         let (chain, keymap_element) = {
             let keymap = keymaps.keymap_for_mode(buffer.mode()).unwrap();
 
-            if let Some(buf1) = self.buffered_keys.first() {
-                (true, keymap.feed(*buf1))
-            } else {
-                (false, keymap.feed(event))
-            }
+            self.buffered_keys.first().map_or_else(
+                || (false, keymap.feed(event)),
+                |buf1| (true, keymap.feed(*buf1)),
+            )
         };
 
         let mut keymap_element = match keymap_element {
@@ -38,7 +37,7 @@ impl EditorWidget {
         for buf_key in self.buffered_keys.iter().skip(1) {
             keymap_element = match keymap_element {
                 KeymapTreeElement::Node(k) => k.feed(*buf_key).unwrap(),
-                _ => unreachable!(),
+                KeymapTreeElement::Leaf(_) => unreachable!(),
             };
         }
 
@@ -90,17 +89,17 @@ impl Widget for EditorWidget {
         let command = self.find_command(&ctx.editor.keymaps, buf, key_event);
 
         if let Some(command) = command {
-            command.call(ctx.editor)
+            command.call(ctx.editor);
         } else if buf.mode().is_insert() {
             if let KeyCode::Char(c) = key_event.code {
                 if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                    doc.text_mut().append(c.to_uppercase().to_string().into())
+                    doc.text_mut().append(c.to_uppercase().to_string().into());
                 } else {
                     doc.text_mut().append(c.to_string().into());
                 }
             }
         }
 
-        EventResult::Consumed(None)
+        EventResult::consumed()
     }
 }

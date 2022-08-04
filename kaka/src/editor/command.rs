@@ -21,7 +21,7 @@ impl Command {
     }
 
     pub fn call(&self, editor: &mut Editor) {
-        (self.fun)(editor)
+        (self.fun)(editor);
     }
 }
 
@@ -34,7 +34,7 @@ impl Debug for Command {
 // Commands
 pub fn dummy(e: &mut Editor) {
     let (_, doc) = current_mut!(e);
-    doc.text_mut().append("a".into())
+    doc.text_mut().append("a".into());
 }
 
 pub fn close(editor: &mut Editor) {
@@ -42,11 +42,11 @@ pub fn close(editor: &mut Editor) {
 }
 
 pub fn enter_insert_mode(editor: &mut Editor) {
-    enter_mode_impl(editor, "insert")
+    enter_mode_impl(editor, "insert");
 }
 
 pub fn enter_xd_mode(editor: &mut Editor) {
-    enter_mode_impl(editor, "xd")
+    enter_mode_impl(editor, "xd");
 }
 
 fn enter_mode_impl(editor: &mut Editor, mode: &str) {
