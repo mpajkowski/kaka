@@ -40,7 +40,7 @@ impl<T: Write> CrosstermCanvas<T> {
             _raw_terminal_guard: setup_environment.then(RawTerminalGuard::init).transpose()?,
         };
 
-        this.set_cursor(start_point)?;
+        this.move_cursor(start_point)?;
         this.clear()?;
         this.flush()?;
 
@@ -125,7 +125,7 @@ impl<T: Write> Canvas for CrosstermCanvas<T> {
         Ok(())
     }
 
-    fn set_cursor(&mut self, point: Point) -> Result<()> {
+    fn move_cursor(&mut self, point: Point) -> Result<()> {
         queue!(self.writer, MoveTo(point.x, point.y))?;
         Ok(())
     }
