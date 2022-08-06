@@ -1,6 +1,7 @@
 use std::ops::{Index, IndexMut};
 
 use kaka_core::shapes::{Point, Rect};
+use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
 use super::{style::Style, Color, Modifier};
@@ -108,6 +109,57 @@ impl Surface {
         }
     }
 
+    /// Print at most the first n characters of a string if enough space is available
+    /// until the end of the line
+    pub fn set_stringn(&mut self, pos: Point, string: impl AsRef<str>, width: usize, style: Style) {
+        let mut idx = self.index_of(pos);
+        let mut x_offset = pos.x as usize;
+
+        let graphemes = UnicodeSegmentation::graphemes(string.as_ref(), true);
+
+        let max_offset =
+            (self.area.right() as usize).min(width.saturating_add(pos.x as usize)) as usize;
+
+        for s in graphemes {
+            let width = s.width();
+
+            if width == 0 {
+                continue;
+            }
+
+            if width > max_offset.saturating_sub(x_offset) {
+                break;
+            }
+
+            self.content[idx].set_symbol(s);
+            self.content[idx].set_style(style);
+
+            for i in idx + 1..idx + width {
+                self.content[i].reset();
+            }
+
+            idx += width;
+            x_offset += width;
+        }
+
+        Point::new(x_offset as u16, pos.y);
+    }
+
+    pub fn index_of(&self, pos: Point) -> usize {
+        debug_assert!(
+            pos.x >= self.area.left()
+                && pos.x < self.area.right()
+                && pos.y >= self.area.top()
+                && pos.y < self.area.bottom(),
+            "Trying to access position outside the buffer: x={}, y={}, area={:?}",
+            pos.x,
+            pos.y,
+            self.area
+        );
+
+        ((pos.y - self.area.y()) * self.area.width() + (pos.x - self.area.x())) as usize
+    }
+
     pub fn diff<'a>(&'a self, other: &'a Self) -> Diff<'a> {
         let previous_buffer = &self.content;
         let next_buffer = &other.content;
@@ -200,22 +252,31 @@ impl IndexMut<usize> for Surface {
 mod test {
     use super::*;
 
-    fn surfaces_10x10(sym1: &str, sym2: &str) -> (Surface, Surface) {
-        let mut cell1 = Cell::default();
-        cell1.set_symbol(sym1);
+    fn surface_10x10(sym: &str) -> Surface {
+        let mut surface = Surface::empty(Rect::new(0, 0, 10, 10));
 
-        let mut cell2 = Cell::default();
-        cell2.set_symbol(sym2);
+        let width = sym.width();
 
-        let surface_old = Surface::filled(Rect::new(0, 0, 10, 10), &cell1);
-        let surface_new = Surface::filled(Rect::new(0, 0, 10, 10), &cell2);
+        for i in 0..100 {
+            if i % width != 0 {
+                continue;
+            }
 
-        (surface_old, surface_new)
+            surface.set_stringn(
+                Point::new(i as u16 % 10, i as u16 / 10),
+                sym,
+                usize::MAX,
+                Style::default(),
+            );
+        }
+
+        surface
     }
 
     #[test]
     fn diff_iterator_full_buffer_changed() {
-        let (old, new) = surfaces_10x10("a", "b");
+        let old = surface_10x10("a");
+        let new = surface_10x10("b");
 
         let diff = Diff::new(&old.content, &new.content, old.area.area() as _);
 
@@ -224,7 +285,8 @@ mod test {
 
     #[test]
     fn diff_iterator_no_changes() {
-        let (old, new) = surfaces_10x10("a", "a");
+        let old = surface_10x10("a");
+        let new = surface_10x10("a");
 
         let diff = Diff::new(&old.content, &new.content, old.area.width() as _);
 
@@ -233,7 +295,8 @@ mod test {
 
     #[test]
     fn diff_iterator_one_change_begin() {
-        let (old, mut new) = surfaces_10x10("a", "a");
+        let old = surface_10x10("a");
+        let mut new = surface_10x10("a");
 
         new.content[0] = Cell::default();
 
@@ -245,7 +308,8 @@ mod test {
 
     #[test]
     fn diff_iterator_one_change_middle() {
-        let (old, mut new) = surfaces_10x10("a", "a");
+        let old = surface_10x10("a");
+        let mut new = surface_10x10("a");
 
         new.content[42] = Cell::default();
 
@@ -257,12 +321,23 @@ mod test {
 
     #[test]
     fn diff_iterator_one_change_end() {
-        let (old, mut new) = surfaces_10x10("a", "a");
+        let old = surface_10x10("a");
+        let mut new = surface_10x10("a");
         new.content[99] = Cell::default();
 
         let mut diff = Diff::new(&old.content, &new.content, old.area.width() as _);
 
         assert_eq!(diff.next(), Some((Point::new(9, 9), &Cell::default())));
         assert_eq!(diff.next(), None);
+    }
+
+    #[test]
+    fn diff_iterator_one_change_long_symbol() {
+        let old = surface_10x10("🚀");
+        let new = surface_10x10("⛄");
+
+        let diff = Diff::new(&old.content, &new.content, old.area.width() as _);
+
+        assert_eq!(diff.count(), 50);
     }
 }

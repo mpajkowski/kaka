@@ -1,9 +1,9 @@
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
-use kaka_core::shapes::Rect;
+use kaka_core::shapes::{Point, Rect};
 
 use super::{widget::Widget, Context, EventResult};
 use crate::{
-    client::{surface::Surface, Color},
+    client::{surface::Surface, Color, Style},
     current_mut,
     editor::{Buffer, Command, KeymapTreeElement, Keymaps},
 };
@@ -65,16 +65,18 @@ impl Widget for EditorWidget {
     fn draw(&self, area: Rect, surface: &mut Surface, ctx: &mut Context<'_>) {
         let (_, doc) = current_mut!(ctx.editor);
 
-        let area = area.area() as usize;
         let text = doc.text();
-        let count = area.min(text.len_chars());
+        let max_y = text.len_lines().min(area.height() as usize);
+        let style = Style::default().fg(Color::Yellow).bg(Color::Black);
 
-        let text_slice = text.slice(..count);
-
-        for (ch, cell) in text_slice.chars().zip(&mut surface.content[..count]) {
-            cell.symbol = ch.to_string();
-            cell.fg = Color::Yellow;
-            cell.bg = Color::Black;
+        for y in 0..max_y {
+            let line = text.line(y);
+            surface.set_stringn(
+                Point::new(0, y as u16),
+                line.to_string(),
+                area.width() as usize,
+                style,
+            );
         }
     }
 
