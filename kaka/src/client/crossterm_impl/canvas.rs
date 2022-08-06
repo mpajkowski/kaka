@@ -79,8 +79,8 @@ impl<T: Write> Canvas for CrosstermCanvas<T> {
         for (point, cell) in cells {
             if !matches!(prev_point, Some(p) if point.x == p.x +1 && point.y == p.y) {
                 queue!(self.writer, MoveTo(point.x, point.y))?;
-                //println!("move to {point:?}");
             }
+
             prev_point = Some(point);
 
             if cell.modifier != modifier {
