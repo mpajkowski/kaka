@@ -4,8 +4,8 @@ use std::fmt::Debug;
 
 #[derive(Debug)]
 pub enum Mode {
-    Xd,
     Insert,
+    Xd,
     #[allow(unused)]
     Custom(Box<dyn CustomModeType>),
 }
@@ -22,8 +22,8 @@ impl Mode {
 
     pub fn name(&self) -> &str {
         match self {
-            Self::Xd => "xd",
             Self::Insert => "insert",
+            Self::Xd => "xd",
             Self::Custom(c) => c.name(),
         }
     }

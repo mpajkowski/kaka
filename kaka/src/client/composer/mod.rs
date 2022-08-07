@@ -85,8 +85,6 @@ impl Composer {
     pub fn handle_event(&mut self, event: Event, ctx: &mut Context) -> bool {
         let mut callbacks = Vec::new();
 
-        let mut consumed = false;
-
         let resized = if let Event::Resize(x, y) = event {
             self.surfaces.resize(Rect::new(0, 0, x, y));
             true
@@ -94,23 +92,17 @@ impl Composer {
             false
         };
 
+        let mut consumed = false;
         for widget in self.widgets.iter_mut().rev() {
             match widget.handle_event(event, ctx) {
-                EventResult::Consumed(Some(cb)) => {
+                EventResult::Consumed(callback) => {
                     consumed = true;
-                    callbacks.push(cb);
+                    callbacks.extend(callback);
+                    break;
                 }
-                EventResult::Consumed(None) => {
-                    consumed = true;
+                EventResult::Ignored(callback) => {
+                    callbacks.extend(callback);
                 }
-                EventResult::Ignored(Some(cb)) => {
-                    callbacks.push(cb);
-                }
-                EventResult::Ignored(None) => {}
-            }
-
-            if consumed {
-                break;
             }
         }
 
@@ -150,7 +142,7 @@ impl Surfaces {
         let prev_surface = &self.surfaces[1 - self.current_surface];
 
         let diff = prev_surface.diff(current_surface);
-        canvas.draw(diff.into_iter())?;
+        canvas.draw(diff)?;
         canvas.flush()?;
 
         // swap surfaces

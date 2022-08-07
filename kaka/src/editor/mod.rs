@@ -2,6 +2,7 @@ mod buffer;
 mod command;
 mod keymap;
 mod mode;
+pub mod utils;
 
 use std::collections::HashMap;
 

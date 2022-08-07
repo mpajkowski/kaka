@@ -32,7 +32,7 @@ impl Debug for Command {
 }
 
 // Commands
-pub fn dummy(e: &mut Editor) {
+pub fn print_a(e: &mut Editor) {
     let (_, doc) = current_mut!(e);
     doc.text_mut().append("a".into());
 }
