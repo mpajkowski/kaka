@@ -1,21 +1,19 @@
-use std::{fmt::Write, io, marker::PhantomData};
-
-use crossterm::event::Event;
-use futures_util::{Stream, StreamExt};
+use std::{env::Args, io, marker::PhantomData};
 
 use crate::{
     client::EditorWidget,
-    editor::Editor,
-    jobs::{Jobs, Outcome},
-    Canvas,
+    editor::{Buffer, Editor},
+    logger, Canvas,
 };
+use crossterm::event::Event;
+use futures_util::{Stream, StreamExt};
+use kaka_core::{document::Document, ropey::Rope};
+use tokio::sync::mpsc;
 
 use crate::Client;
 
 pub struct App<C, E> {
-    jobs: Jobs,
     client: Client<C>,
-    logs: String,
     editor: Editor,
     e: PhantomData<E>,
 }
@@ -24,28 +22,55 @@ impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin> App<C, E> {
     pub fn new(client: Client<C>) -> Self {
         Self {
             client,
-            jobs: Jobs::default(),
-            logs: String::new(),
             editor: Editor::init(),
             e: PhantomData,
         }
     }
 
-    pub async fn run(&mut self, term_events: &mut E) -> anyhow::Result<()> {
+    pub async fn run(&mut self, args: Args, term_events: &mut E) -> anyhow::Result<()> {
+        // init logging
+        let log_document = Document::new_scratch();
+        let buffer = Buffer::new_logging(&log_document);
+        self.editor.buffers.insert(buffer.id(), buffer);
+        self.editor
+            .documents
+            .insert(log_document.id(), log_document);
+
+        let (log_tx, mut log_rx) = mpsc::unbounded_channel();
+
+        logger::enable(log_tx);
+
+        // open paths from argv
+        for (idx, arg) in args.skip(1).enumerate() {
+            if let Err(e) = self.editor.open(&*arg, idx == 0) {
+                log::error!("{e}");
+            }
+        }
+
+        // nothing opened (except logs) - create first scratch buffer
+        if self.editor.buffers.len() == 1 {
+            self.editor.open_scratch(true)?;
+        }
+
+        // push widgets
         self.client
             .composer_mut()
             .push_widget(EditorWidget::default());
 
         self.render()?;
 
+        // enter event loop
         loop {
             let should_redraw = tokio::select! {
                 Some(ev) = term_events.next() => {
-                    self.on_term_event(ev?)
+                    let ev = ev?;
+
+                    log::debug!("Event: {ev:?}");
+                    self.on_term_event(ev)
                 },
-                Some(outcome) = self.jobs.jobs.next() => {
-                    self.on_job_outcome(outcome?)
-                },
+                Some(log) = log_rx.recv() => {
+                    self.on_log(log)
+                }
             };
 
             let exit = self.editor.should_exit();
@@ -63,19 +88,14 @@ impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin> App<C, E> {
     }
 
     fn on_term_event(&mut self, event: Event) -> bool {
-        let _ = writeln!(self.logs, "event: {event:?}");
-
-        self.client
-            .handle_event(event, &mut self.editor, &mut self.jobs)
+        self.client.handle_event(event, &mut self.editor)
     }
 
-    fn on_job_outcome(&mut self, outcome: Outcome) -> bool {
-        let _ = write!(self.logs, "outcome: {outcome:?}");
-
-        outcome.exit
+    fn on_log(&mut self, log: Rope) -> bool {
+        self.editor.on_log(log)
     }
 
     fn render(&mut self) -> anyhow::Result<()> {
-        self.client.render(&mut self.editor, &mut self.jobs)
+        self.client.render(&mut self.editor)
     }
 }

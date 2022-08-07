@@ -12,6 +12,8 @@ use std::{
 
 use ropey::Rope;
 
+use crate::transaction::Transaction;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DocumentId(NonZeroUsize);
 
@@ -26,9 +28,11 @@ impl DocumentId {
     }
 }
 
+#[derive(Debug)]
 pub struct Document {
     id: DocumentId,
     text: Rope,
+    transaction: Option<Transaction>,
     fs_metadata: Option<FilesystemMetadata>,
 }
 
@@ -39,6 +43,7 @@ impl Document {
             id: DocumentId::next(),
             text: Rope::new(),
             fs_metadata: None,
+            transaction: None,
         }
     }
 
@@ -53,6 +58,19 @@ impl Document {
     /// `io::Error` - file not found | lack of permissions
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
         let path = path.as_ref();
+
+        if !path.exists() {
+            return Ok(Self {
+                id: DocumentId::next(),
+                text: Rope::new(),
+                transaction: None,
+                fs_metadata: Some(FilesystemMetadata {
+                    path: path.to_owned(),
+                    writable: true, // TODO check parent metadata?
+                }),
+            });
+        }
+
         let metadata = path.metadata()?;
 
         if !metadata.is_file() {
@@ -67,11 +85,13 @@ impl Document {
 
         Ok(Self {
             id: DocumentId::next(),
+
             text,
             fs_metadata: Some(FilesystemMetadata {
                 path: path.into(),
                 writable,
             }),
+            transaction: None,
         })
     }
 
@@ -94,9 +114,38 @@ impl Document {
     pub const fn id(&self) -> DocumentId {
         self.id
     }
+
+    pub fn transaction_mut(&mut self) -> Option<&mut Transaction> {
+        self.transaction.as_mut()
+    }
+
+    pub fn transaction(&self) -> Option<&Transaction> {
+        self.transaction.as_ref()
+    }
+
+    pub fn begin_tx(&mut self, pos: usize) {
+        self.transaction = Some(Transaction::begin(&self.text, pos));
+    }
+
+    pub fn commit_tx(&mut self) {
+        let tx = self.transaction.take();
+        if let Some(tx) = tx {
+            tx.commit(&mut self.text);
+        }
+    }
+
+    pub fn save(&self) -> Result<(), std::io::Error> {
+        if let Some(metadata) = self.fs_metadata.as_ref() {
+            if metadata.writable {
+                self.text.write_to(File::create(&metadata.path)?)?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
-#[allow(unused)]
+#[derive(Debug)]
 pub struct FilesystemMetadata {
     path: PathBuf,
     writable: bool,

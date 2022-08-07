@@ -1,11 +1,11 @@
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::{Event, KeyEvent};
 use kaka_core::shapes::{Point, Rect};
 
 use super::{widget::Widget, Context, EventResult};
 use crate::{
     client::{surface::Surface, Color, Style},
     current, current_mut,
-    editor::{self, Buffer, Command, KeymapTreeElement, Keymaps},
+    editor::{self, insert_mode_on_key, Buffer, Command, KeymapTreeElement, Keymaps},
 };
 
 #[derive(Default)]
@@ -63,12 +63,15 @@ impl EditorWidget {
 
 impl Widget for EditorWidget {
     fn draw(&self, area: Rect, surface: &mut Surface, ctx: &mut Context<'_>) {
-        let (buf, doc) = current!(ctx.editor);
+        // TODO scroll
+        let (_, doc) = current!(ctx.editor);
 
         let text = doc.text();
 
-        // TODO scroll?
         let max_y = (area.height() as usize).min(text.len_lines());
+        let end = text.line_to_char(max_y);
+
+        let text = text.slice(0..end);
 
         let style = Style::default().fg(Color::Yellow).bg(Color::Black);
 
@@ -87,7 +90,7 @@ impl Widget for EditorWidget {
     }
 
     fn handle_event(&mut self, event: Event, ctx: &mut Context) -> super::EventResult {
-        let (buf, doc) = current_mut!(ctx.editor);
+        let (buf, _) = current_mut!(ctx.editor);
 
         let key_event = match event {
             Event::Key(ev) => ev,
@@ -98,15 +101,13 @@ impl Widget for EditorWidget {
 
         let is_insert = buf.mode().is_insert();
 
+        let mut context = editor::CommandData::new(ctx.editor, key_event);
+
         // TODO delegate to Mode?
         if let Some(command) = command {
-            let mut context = editor::CommandData::new(ctx.editor);
             command.call(&mut context);
         } else if is_insert {
-            if let KeyCode::Char(c) = key_event.code {
-                doc.text_mut().append(c.to_string().into());
-                buf.current_char_in_line += 1;
-            }
+            insert_mode_on_key(&mut context, key_event);
         }
 
         EventResult::Consumed

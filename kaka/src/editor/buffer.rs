@@ -1,57 +1,79 @@
-use anyhow::{Context, Result};
-use kaka_core::{shapes::Point, Document, DocumentId};
+use anyhow::{ensure, Context, Result};
+use kaka_core::document::{Document, DocumentId};
 
-use std::{
-    num::NonZeroUsize,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::Mode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BufferId(NonZeroUsize);
+pub struct BufferId(pub(crate) usize);
 
 impl BufferId {
+    pub const LOGGER: Self = Self(usize::MAX);
+
     pub fn next() -> Self {
         pub static IDS: AtomicUsize = AtomicUsize::new(1);
-        Self(
-            NonZeroUsize::new(IDS.fetch_add(1, Ordering::SeqCst))
-                .expect("BufferId counter is messed"),
-        )
+        let next = IDS.fetch_add(1, Ordering::SeqCst);
+
+        Self(next)
     }
 }
 
+#[derive(Debug)]
 pub struct Buffer {
     id: BufferId,
     document_id: DocumentId,
     avail_modes: Vec<Mode>,
     current_mode: usize,
-    pub current_line: usize,
-    pub current_char_in_line: usize,
+    pub text_position: usize,
+    pub saved_column: usize,
 }
 
 impl Buffer {
-    pub fn new_text_buffer(document: &Document) -> Self {
+    pub fn new_text(pos: usize, document: &Document) -> Result<Self> {
         Self::new(
+            pos,
             [Mode::Normal, Mode::Xd, Mode::Insert],
             document,
             &Mode::Normal,
         )
-        .unwrap()
+    }
+
+    pub fn new_logging(document: &Document) -> Self {
+        Self {
+            id: BufferId::LOGGER,
+            document_id: document.id(),
+            avail_modes: vec![Mode::Normal],
+            current_mode: 0,
+            text_position: 0,
+            saved_column: 0,
+        }
     }
 
     pub fn new(
+        pos: usize,
         avail_modes: impl IntoIterator<Item = Mode>,
         document: &Document,
         start_mode: &Mode,
     ) -> Result<Self> {
+        let text = document.text();
+
+        ensure!(
+            pos == 0 || text.get_char(pos).is_some(),
+            "Start position {pos} is out of bounds"
+        );
+
+        let start_line_idx = text.char_to_line(pos);
+        let start_line_pos = text.line_to_char(start_line_idx);
+        let saved_column = pos - start_line_pos;
+
         let mut this = Self {
             id: BufferId::next(),
             document_id: document.id(),
             avail_modes: avail_modes.into_iter().collect(),
             current_mode: 0,
-            current_line: 0,
-            current_char_in_line: 0,
+            text_position: pos,
+            saved_column,
         };
         this.set_mode_impl(start_mode.name())?;
 
@@ -70,9 +92,13 @@ impl Buffer {
         &self.avail_modes[self.current_mode]
     }
 
-    pub fn set_mode(&mut self, mode: &str) {
+    pub fn switch_mode(&mut self, mode: &str) {
         // ignore error for now
         self.set_mode_impl(mode).ok();
+    }
+
+    pub fn immortal(&self) -> bool {
+        self.id == BufferId::LOGGER
     }
 
     fn set_mode_impl(&mut self, mode: &str) -> Result<()> {
@@ -85,5 +111,51 @@ impl Buffer {
         self.current_mode = mode_pos;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use kaka_core::ropey::Rope;
+
+    use super::*;
+
+    #[test]
+    fn start_position() {
+        let mut document = Document::new_scratch();
+        *document.text_mut() = Rope::from("kaka\n");
+
+        let buffer = Buffer::new_text(0, &document).unwrap();
+        assert_eq!(buffer.text_position, 0);
+        assert_eq!(buffer.saved_column, 0);
+
+        let buffer = Buffer::new_text(1, &document).unwrap();
+        assert_eq!(buffer.text_position, 1);
+        assert_eq!(buffer.saved_column, 1);
+
+        let buffer = Buffer::new_text(2, &document).unwrap();
+        assert_eq!(buffer.text_position, 2);
+        assert_eq!(buffer.saved_column, 2);
+
+        let buffer = Buffer::new_text(3, &document).unwrap();
+        assert_eq!(buffer.text_position, 3);
+        assert_eq!(buffer.saved_column, 3);
+
+        assert!(
+            Buffer::new_text(5, &document).is_err(),
+            "Created buffer with position set out of document bounds"
+        );
+    }
+
+    #[test]
+    fn mode_switch() {
+        let modes = [Mode::Normal, Mode::Insert];
+
+        let document = Document::new_scratch();
+        let mut buffer = Buffer::new(0, modes, &document, &Mode::Normal).unwrap();
+        assert!(matches!(buffer.mode(), &Mode::Normal));
+
+        buffer.switch_mode("insert");
+        assert!(buffer.mode().is_insert());
     }
 }

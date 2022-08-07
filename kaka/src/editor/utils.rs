@@ -68,8 +68,8 @@ impl<'a> Token<'a> {
                     return Ok(KeyEvent::new(KeyCode::F(num), KeyModifiers::empty()));
                 }
 
-                if let Some(keycode) = to_known_special_keycode(string) {
-                    return Ok(KeyEvent::new(keycode, KeyModifiers::empty()));
+                if let Some(event) = to_known_special_keyevent(string) {
+                    return Ok(event);
                 }
 
                 let modifier = match first_char.to_ascii_uppercase() {
@@ -94,20 +94,26 @@ impl<'a> Token<'a> {
     }
 }
 
-fn to_known_special_keycode(string: &str) -> Option<KeyCode> {
-    Some(match &*string.to_uppercase() {
+fn to_known_special_keyevent(string: &str) -> Option<KeyEvent> {
+    let mut modifiers = KeyModifiers::empty();
+    let code = match &*string.to_uppercase() {
         "ESC" => KeyCode::Esc,
         "BS" => KeyCode::Backspace,
         "DEL" => KeyCode::Backspace,
         "CR" => KeyCode::Enter,
         "TAB" => KeyCode::Tab,
-        "S-TAB" => KeyCode::BackTab,
+        "S-TAB" => {
+            modifiers = KeyModifiers::SHIFT;
+            KeyCode::BackTab
+        }
         "LEFT" => KeyCode::Left,
         "DOWN" => KeyCode::Down,
         "UP" => KeyCode::Up,
         "RIGHT" => KeyCode::Right,
         _ => return None,
-    })
+    };
+
+    Some(KeyEvent { code, modifiers })
 }
 
 #[cfg(test)]

@@ -1,5 +1,3 @@
-use crossterm::event::KeyEvent;
-
 use std::fmt::Debug;
 
 #[derive(Debug)]
@@ -33,5 +31,4 @@ impl Mode {
 
 pub trait CustomModeType: Debug {
     fn name(&self) -> &str;
-    fn on_key(&self, key_event: KeyEvent);
 }

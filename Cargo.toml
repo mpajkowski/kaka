@@ -1,2 +1,3 @@
 [workspace]
-members = ["kaka-core", "kaka"]
+members = ["kaka-core", "kaka", "xtask"]
+default-members = ["kaka"]

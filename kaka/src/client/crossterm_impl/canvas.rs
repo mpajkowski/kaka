@@ -27,7 +27,6 @@ pub struct CrosstermCanvas<T> {
 impl<T: Write> CrosstermCanvas<T> {
     pub fn new(writer: T, setup_environment: bool) -> Result<Self> {
         let (width, height) = crossterm::terminal::size()?;
-        println!("size: {:?}", (width, height));
         let start_point = Point::new(0, 0);
 
         if setup_environment {
