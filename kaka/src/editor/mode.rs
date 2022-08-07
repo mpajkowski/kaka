@@ -4,6 +4,7 @@ use std::fmt::Debug;
 
 #[derive(Debug)]
 pub enum Mode {
+    Normal,
     Insert,
     Xd,
     #[allow(unused)]
@@ -23,6 +24,7 @@ impl Mode {
     pub fn name(&self) -> &str {
         match self {
             Self::Insert => "insert",
+            Self::Normal => "normal",
             Self::Xd => "xd",
             Self::Custom(c) => c.name(),
         }

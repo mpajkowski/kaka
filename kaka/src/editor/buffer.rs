@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use kaka_core::{Document, DocumentId};
+use kaka_core::{shapes::Point, Document, DocumentId};
 
 use std::{
     num::NonZeroUsize,
@@ -26,11 +26,18 @@ pub struct Buffer {
     document_id: DocumentId,
     avail_modes: Vec<Mode>,
     current_mode: usize,
+    pub current_line: usize,
+    pub current_char_in_line: usize,
 }
 
 impl Buffer {
     pub fn new_text_buffer(document: &Document) -> Self {
-        Self::new([Mode::Xd, Mode::Insert], document, &Mode::Xd).unwrap()
+        Self::new(
+            [Mode::Normal, Mode::Xd, Mode::Insert],
+            document,
+            &Mode::Normal,
+        )
+        .unwrap()
     }
 
     pub fn new(
@@ -43,18 +50,18 @@ impl Buffer {
             document_id: document.id(),
             avail_modes: avail_modes.into_iter().collect(),
             current_mode: 0,
+            current_line: 0,
+            current_char_in_line: 0,
         };
         this.set_mode_impl(start_mode.name())?;
 
         Ok(this)
     }
 
-    #[inline]
     pub const fn id(&self) -> BufferId {
         self.id
     }
 
-    #[inline]
     pub const fn document_id(&self) -> DocumentId {
         self.document_id
     }

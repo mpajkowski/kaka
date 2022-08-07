@@ -12,7 +12,7 @@ use kaka_core::{Document, DocumentId};
 pub use keymap::{Keymap, KeymapTreeElement};
 pub use mode::Mode;
 
-pub use self::command::Command;
+pub use self::command::{Command, CommandData};
 pub use self::keymap::Keymaps;
 
 /// Holds editor state
@@ -30,8 +30,9 @@ impl Editor {
         let mut keymaps = Keymaps::default();
         keymaps.register_keymap_for_mode(&Mode::Xd, Keymap::xd());
         keymaps.register_keymap_for_mode(&Mode::Insert, Keymap::insert_mode());
+        keymaps.register_keymap_for_mode(&Mode::Normal, Keymap::normal_mode());
 
-        let scratch_document = Document::new_scratch();
+        let scratch_document = Document::from_path("README.md").unwrap();
 
         let init_buffer = Buffer::new_text_buffer(&scratch_document);
         let init_buffer_id = init_buffer.id();

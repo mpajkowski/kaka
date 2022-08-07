@@ -96,7 +96,7 @@ impl<'a> Token<'a> {
 
 fn to_known_special_keycode(string: &str) -> Option<KeyCode> {
     Some(match &*string.to_uppercase() {
-        "ESC" => KeyCode::Enter,
+        "ESC" => KeyCode::Esc,
         "BS" => KeyCode::Backspace,
         "DEL" => KeyCode::Backspace,
         "CR" => KeyCode::Enter,

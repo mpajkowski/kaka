@@ -1,11 +1,11 @@
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use kaka_core::shapes::{Point, Rect};
 
 use super::{widget::Widget, Context, EventResult};
 use crate::{
     client::{surface::Surface, Color, Style},
-    current_mut,
-    editor::{Buffer, Command, KeymapTreeElement, Keymaps},
+    current, current_mut,
+    editor::{self, Buffer, Command, KeymapTreeElement, Keymaps},
 };
 
 #[derive(Default)]
@@ -63,17 +63,23 @@ impl EditorWidget {
 
 impl Widget for EditorWidget {
     fn draw(&self, area: Rect, surface: &mut Surface, ctx: &mut Context<'_>) {
-        let (_, doc) = current_mut!(ctx.editor);
+        let (buf, doc) = current!(ctx.editor);
 
         let text = doc.text();
-        let max_y = text.len_lines().min(area.height() as usize);
+
+        // TODO scroll?
+        let max_y = (area.height() as usize).min(text.len_lines());
+
         let style = Style::default().fg(Color::Yellow).bg(Color::Black);
 
         for y in 0..max_y {
             let line = text.line(y);
+
+            let line_render = line.slice(0..(area.width() as usize).min(line.len_chars()));
+
             surface.set_stringn(
                 Point::new(0, y as u16),
-                line.to_string(),
+                &line_render.to_string(),
                 area.width() as usize,
                 style,
             );
@@ -85,23 +91,24 @@ impl Widget for EditorWidget {
 
         let key_event = match event {
             Event::Key(ev) => ev,
-            _ => return EventResult::ignored(),
+            _ => return EventResult::Ignored,
         };
 
         let command = self.find_command(&ctx.editor.keymaps, buf, key_event);
 
+        let is_insert = buf.mode().is_insert();
+
+        // TODO delegate to Mode?
         if let Some(command) = command {
-            command.call(ctx.editor);
-        } else if buf.mode().is_insert() {
+            let mut context = editor::CommandData::new(ctx.editor);
+            command.call(&mut context);
+        } else if is_insert {
             if let KeyCode::Char(c) = key_event.code {
-                if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                    doc.text_mut().append(c.to_uppercase().to_string().into());
-                } else {
-                    doc.text_mut().append(c.to_string().into());
-                }
+                doc.text_mut().append(c.to_string().into());
+                buf.current_char_in_line += 1;
             }
         }
 
-        EventResult::consumed()
+        EventResult::Consumed
     }
 }

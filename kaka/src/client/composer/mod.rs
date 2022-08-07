@@ -4,15 +4,13 @@ mod widget;
 use crossterm::event::Event;
 pub use editor::EditorWidget;
 
-use kaka_core::shapes::Rect;
+use kaka_core::shapes::{Point, Rect};
 
-use crate::{editor::Editor, jobs::Jobs};
+use crate::{current, editor::Editor, jobs::Jobs};
 
 use self::widget::Widget;
 
 use super::{canvas::Canvas, surface::Surface};
-
-pub type Callback = Box<dyn FnOnce(&mut Composer, &mut Editor)>;
 
 pub struct Context<'a> {
     pub editor: &'a mut Editor,
@@ -22,37 +20,12 @@ pub struct Context<'a> {
 pub struct Composer {
     widgets: Vec<Box<dyn Widget>>,
     surfaces: Surfaces,
+    cursor: Point,
 }
 
 pub enum EventResult {
-    Ignored(Option<Callback>),
-    Consumed(Option<Callback>),
-}
-
-impl EventResult {
-    pub fn ignored() -> Self {
-        Self::Ignored(None)
-    }
-
-    pub fn consumed() -> Self {
-        Self::Consumed(None)
-    }
-
-    #[allow(unused)]
-    pub fn callback<C: FnOnce(&mut Composer, &mut Editor) + 'static>(
-        mut self,
-        callback: C,
-    ) -> Self {
-        let callback = Box::new(callback);
-
-        match self {
-            EventResult::Consumed(ref mut c) | EventResult::Ignored(ref mut c) => {
-                *c = Some(callback);
-            }
-        }
-
-        self
-    }
+    Ignored,
+    Consumed,
 }
 
 impl Composer {
@@ -62,6 +35,7 @@ impl Composer {
         Self {
             surfaces,
             widgets: vec![],
+            cursor: Point::new(0, 0),
         }
     }
 
@@ -77,14 +51,12 @@ impl Composer {
             w.draw(area, current_surface, ctx);
         }
 
-        self.surfaces.render(canvas)?;
+        self.surfaces.render(canvas, self.cursor)?;
 
         Ok(())
     }
 
     pub fn handle_event(&mut self, event: Event, ctx: &mut Context) -> bool {
-        let mut callbacks = Vec::new();
-
         let resized = if let Event::Resize(x, y) = event {
             self.surfaces.resize(Rect::new(0, 0, x, y));
             true
@@ -94,21 +66,18 @@ impl Composer {
 
         let mut consumed = false;
         for widget in self.widgets.iter_mut().rev() {
-            match widget.handle_event(event, ctx) {
-                EventResult::Consumed(callback) => {
-                    consumed = true;
-                    callbacks.extend(callback);
-                    break;
-                }
-                EventResult::Ignored(callback) => {
-                    callbacks.extend(callback);
-                }
+            if let EventResult::Consumed = widget.handle_event(event, ctx) {
+                consumed = true;
+                break;
             }
         }
 
-        for callback in callbacks {
-            callback(self, ctx.editor);
-        }
+        let surface = self.surfaces.surface();
+        let (buf, _) = current!(ctx.editor);
+        let cursor_x = buf.current_char_in_line % (surface.area.width() as usize);
+        let cursor_y = buf.current_line % (surface.area.height() as usize);
+
+        self.cursor = Point::new(cursor_x as u16, cursor_y as u16);
 
         consumed || resized
     }
@@ -137,12 +106,19 @@ impl Surfaces {
         &mut self.surfaces[self.current_surface]
     }
 
-    pub fn render<C: Canvas>(&mut self, canvas: &mut C) -> anyhow::Result<()> {
+    pub const fn surface(&self) -> &Surface {
+        &self.surfaces[self.current_surface]
+    }
+
+    pub fn render<C: Canvas>(&mut self, canvas: &mut C, cursor: Point) -> anyhow::Result<()> {
         let current_surface = &self.surfaces[self.current_surface];
         let prev_surface = &self.surfaces[1 - self.current_surface];
 
+        canvas.hide_cursor()?;
         let diff = prev_surface.diff(current_surface);
         canvas.draw(diff)?;
+        canvas.move_cursor(cursor)?;
+        canvas.show_cursor()?;
         canvas.flush()?;
 
         // swap surfaces

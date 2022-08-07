@@ -36,6 +36,8 @@ impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin> App<C, E> {
             .composer_mut()
             .push_widget(EditorWidget::default());
 
+        self.render()?;
+
         loop {
             let should_redraw = tokio::select! {
                 Some(ev) = term_events.next() => {

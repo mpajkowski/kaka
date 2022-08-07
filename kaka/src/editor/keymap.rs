@@ -39,8 +39,42 @@ impl Keymap {
         self.0.get(&event)
     }
 
+    /// some input paths used for tests
+    pub fn xd() -> Self {
+        let mappings = [
+            ("q", close as CommandFn),
+            ("x", print_a),
+            ("i", enter_insert_mode),
+            ("gac", print_a),
+            ("gz", print_a),
+            ("<C-a>x", print_a),
+            ("<C-a><C-b>d", print_a),
+        ];
+
+        Self::with_mappings(mappings).expect("covered in unit tests :)")
+    }
+
+    pub fn insert_mode() -> Self {
+        Self::with_mappings([("<ESC>", enter_normal_mode as CommandFn)]).unwrap()
+    }
+
+    pub fn normal_mode() -> Self {
+        let mappings = [
+            // mode
+            ("i", enter_insert_mode as CommandFn),
+            // movement
+            ("h", move_left),
+            ("j", move_down),
+            ("k", move_up),
+            ("l", move_right),
+            ("q", close), // tmp
+        ];
+
+        Self::with_mappings(mappings).unwrap()
+    }
+
     pub fn with_mappings(
-        mappings: impl IntoIterator<Item = (&'static str, Command)>,
+        mappings: impl IntoIterator<Item = (&'static str, CommandFn)>,
     ) -> Result<Self> {
         let mut keymap = Self::default();
 
@@ -61,13 +95,11 @@ impl Keymap {
 
             let first = mapping[0];
             if let Entry::Vacant(e) = keymap.0.entry(first) {
-                if len == 1 {
-                    e.insert(KeymapTreeElement::Leaf(command));
-                    // mapping loop is not going to be executed anyway
-                    // to satisfy borrowck
-                    continue;
-                } else {
+                if len > 1 {
                     e.insert(KeymapTreeElement::Node(Self::default()));
+                } else {
+                    e.insert(KeymapTreeElement::Leaf(command!(command)));
+                    continue;
                 }
             }
 
@@ -76,7 +108,6 @@ impl Keymap {
                 .get_mut(&first)
                 .map(|elem| match elem {
                     KeymapTreeElement::Node(ref mut n) => n,
-                    // invariant - nodes are always before leaves
                     KeymapTreeElement::Leaf(_) => unreachable!(),
                 })
                 .unwrap();
@@ -86,8 +117,7 @@ impl Keymap {
                     if idx < len - 1 {
                         e.insert(KeymapTreeElement::Node(Self::default()));
                     } else {
-                        e.insert(KeymapTreeElement::Leaf(command));
-                        // end of loop, satisfy borrowck
+                        e.insert(KeymapTreeElement::Leaf(command!(command)));
                         break;
                     }
                 }
@@ -104,31 +134,6 @@ impl Keymap {
         }
 
         Ok(keymap)
-    }
-
-    /// some input paths used for tests
-    pub fn xd() -> Self {
-        let mappings = [
-            ("q", command!(close)),
-            ("x", command!(print_a)),
-            ("i", command!(enter_insert_mode)),
-            ("gac", command!(print_a)),
-            ("gz", command!(print_a)),
-            ("<C-a>x", command!(print_a)),
-            ("<C-a><C-b>d", command!(print_a)),
-        ];
-
-        Self::with_mappings(mappings).expect("covered in unit tests :)")
-    }
-
-    pub fn insert_mode() -> Self {
-        let esc = KeyEvent {
-            code: KeyCode::Esc,
-            modifiers: KeyModifiers::NONE,
-        };
-        let mut map = HashMap::new();
-        map.insert(esc, KeymapTreeElement::Leaf(command!(enter_xd_mode)));
-        Self(map)
     }
 }
 
