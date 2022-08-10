@@ -6,7 +6,7 @@ pub use editor::EditorWidget;
 
 use kaka_core::shapes::{Point, Rect};
 
-use crate::{current, editor::Editor, jobs::Jobs};
+use crate::{current, editor::Editor};
 
 use self::widget::Widget;
 
@@ -14,7 +14,6 @@ use super::{canvas::Canvas, surface::Surface};
 
 pub struct Context<'a> {
     pub editor: &'a mut Editor,
-    pub jobs: &'a mut Jobs,
 }
 
 pub struct Composer {
@@ -73,9 +72,14 @@ impl Composer {
         }
 
         let surface = self.surfaces.surface();
-        let (buf, _) = current!(ctx.editor);
-        let cursor_x = buf.current_char_in_line % (surface.area.width() as usize);
-        let cursor_y = buf.current_line % (surface.area.height() as usize);
+
+        let (buf, doc) = current!(ctx.editor);
+
+        let text = doc.text();
+
+        let pos = buf.text_position;
+        let cursor_y = text.char_to_line(pos) % surface.area.height() as usize;
+        let cursor_x = (pos - text.line_to_char(cursor_y)) % surface.area.width() as usize;
 
         self.cursor = Point::new(cursor_x as u16, cursor_y as u16);
 

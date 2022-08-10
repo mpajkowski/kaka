@@ -4,20 +4,22 @@ mod keymap;
 mod mode;
 pub mod utils;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::path::Path;
 
 pub use buffer::{Buffer, BufferId};
 use crossterm::event::KeyEvent;
-use kaka_core::{Document, DocumentId};
+use kaka_core::document::{Document, DocumentId};
+use kaka_core::ropey::Rope;
 pub use keymap::{Keymap, KeymapTreeElement};
 pub use mode::Mode;
 
-pub use self::command::{Command, CommandData};
+pub use self::command::{insert_mode_on_key, Command, CommandData};
 pub use self::keymap::Keymaps;
 
 /// Holds editor state
 pub struct Editor {
-    pub buffers: HashMap<BufferId, Buffer>,
+    pub buffers: BTreeMap<BufferId, Buffer>,
     pub documents: HashMap<DocumentId, Document>,
     pub current: BufferId,
     pub buffered_keys: Vec<KeyEvent>,
@@ -32,30 +34,68 @@ impl Editor {
         keymaps.register_keymap_for_mode(&Mode::Insert, Keymap::insert_mode());
         keymaps.register_keymap_for_mode(&Mode::Normal, Keymap::normal_mode());
 
-        let scratch_document = Document::from_path("README.md").unwrap();
-
-        let init_buffer = Buffer::new_text_buffer(&scratch_document);
-        let init_buffer_id = init_buffer.id();
-
         Self {
-            buffers: {
-                let mut buffers = HashMap::new();
-                buffers.insert(init_buffer_id, init_buffer);
-                buffers
-            },
-            documents: {
-                let mut documents = HashMap::new();
-                documents.insert(scratch_document.id(), scratch_document);
-                documents
-            },
-            current: init_buffer_id,
+            buffers: BTreeMap::new(),
+            documents: HashMap::new(),
+            current: BufferId::LOGGER,
             buffered_keys: Vec::new(),
             exit_code: None,
             keymaps,
         }
     }
 
+    pub fn open(&mut self, path: impl AsRef<Path>, set_current: bool) -> anyhow::Result<()> {
+        let document = Document::from_path(path)?;
+        let buffer = Buffer::new_text(0, &document)?;
+
+        let buffer_id = buffer.id();
+        self.documents.insert(document.id(), document);
+        self.buffers.insert(buffer_id, buffer);
+
+        if set_current {
+            self.current = buffer_id;
+        }
+
+        Ok(())
+    }
+
+    pub fn open_scratch(&mut self, set_current: bool) -> anyhow::Result<()> {
+        let document = Document::new_scratch();
+        let buffer = Buffer::new_text(0, &document)?;
+
+        self.add_buffer_and_document(buffer, document, set_current);
+
+        Ok(())
+    }
+
+    pub fn add_buffer_and_document(
+        &mut self,
+        buffer: Buffer,
+        document: Document,
+        set_current: bool,
+    ) {
+        let buffer_id = buffer.id();
+        self.documents.insert(document.id(), document);
+        self.buffers.insert(buffer_id, buffer);
+
+        if set_current {
+            self.current = buffer_id;
+        }
+    }
+
     pub const fn should_exit(&self) -> bool {
         self.exit_code.is_some()
+    }
+
+    pub fn on_log(&mut self, log: Rope) -> bool {
+        let log_doc = self
+            .buffers
+            .get(&BufferId::LOGGER)
+            .and_then(|buf| self.documents.get_mut(&buf.document_id()))
+            .expect("logging not initialized");
+
+        log_doc.text_mut().append(log);
+
+        self.current == BufferId::LOGGER
     }
 }

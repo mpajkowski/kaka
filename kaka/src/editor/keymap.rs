@@ -4,7 +4,7 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::KeyEvent;
 
 use super::{command::*, Mode};
 use crate::command;
@@ -44,7 +44,8 @@ impl Keymap {
         let mappings = [
             ("q", close as CommandFn),
             ("x", print_a),
-            ("i", enter_insert_mode),
+            ("i", switch_to_insert_mode_before),
+            ("a", switch_to_insert_mode_after),
             ("gac", print_a),
             ("gz", print_a),
             ("<C-a>x", print_a),
@@ -55,19 +56,28 @@ impl Keymap {
     }
 
     pub fn insert_mode() -> Self {
-        Self::with_mappings([("<ESC>", enter_normal_mode as CommandFn)]).unwrap()
+        Self::with_mappings([("<ESC>", switch_to_normal_mode as CommandFn)]).unwrap()
     }
 
     pub fn normal_mode() -> Self {
         let mappings = [
             // mode
-            ("i", enter_insert_mode as CommandFn),
+            ("i", switch_to_insert_mode_before as CommandFn),
+            ("a", switch_to_insert_mode_after),
             // movement
             ("h", move_left),
             ("j", move_down),
             ("k", move_up),
             ("l", move_right),
-            ("q", close), // tmp
+            ("<Space>xd", switch_to_xd_mode),
+            ("zs", save), // tmp
+            ("ZZ", close),
+            ("x", remove_char),
+            // buffer
+            ("<TAB>", buffer_next),
+            ("<S-TAB>", buffer_prev),
+            ("<C-b>c", buffer_create),
+            ("<C-b>k", buffer_kill),
         ];
 
         Self::with_mappings(mappings).unwrap()

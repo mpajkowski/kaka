@@ -5,10 +5,9 @@
     clippy::use_self
 )]
 
-mod document;
+pub mod document;
 pub mod shapes;
+pub mod transaction;
 
 // re-export ropey
 pub use ropey;
-
-pub use document::{Document, DocumentId};

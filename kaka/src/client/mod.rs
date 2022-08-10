@@ -13,7 +13,6 @@ pub use surface::Cell;
 use anyhow::Result;
 
 use crate::editor::Editor;
-use crate::jobs::Jobs;
 
 use self::composer::Context;
 
@@ -32,17 +31,17 @@ impl<C: Canvas> Client<C> {
         Self { canvas, composer }
     }
 
-    pub fn render(&mut self, editor: &mut Editor, jobs: &mut Jobs) -> Result<()> {
-        let mut ctx = Context { editor, jobs };
+    pub fn render(&mut self, editor: &mut Editor) -> Result<()> {
+        let mut ctx = Context { editor };
         self.composer.render(&mut self.canvas, &mut ctx)
     }
 
-    pub fn handle_event(&mut self, event: Event, editor: &mut Editor, jobs: &mut Jobs) -> bool {
+    pub fn handle_event(&mut self, event: Event, editor: &mut Editor) -> bool {
         if matches!(event, Event::Resize(_, _)) {
             let _ = self.canvas.clear();
         }
 
-        let mut ctx = Context { editor, jobs };
+        let mut ctx = Context { editor };
         self.composer.handle_event(event, &mut ctx)
     }
 
