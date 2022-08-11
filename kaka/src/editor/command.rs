@@ -12,15 +12,7 @@ pub type CommandFn = fn(&mut CommandData);
 pub struct CommandData<'a> {
     pub editor: &'a mut Editor,
     pub trigger: KeyEvent,
-}
-
-impl<'a> CommandData<'a> {
-    pub fn new(editor: &'a mut Editor, key_event: KeyEvent) -> Self {
-        Self {
-            editor,
-            trigger: key_event,
-        }
-    }
+    pub count: u16,
 }
 
 #[derive(Clone)]
@@ -311,10 +303,11 @@ mod test {
 
         editor.add_buffer_and_document(buffer, document, true);
 
-        let mut data = CommandData::new(
-            &mut editor,
-            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
-        );
+        let mut data = CommandData {
+            editor: &mut editor,
+            trigger: KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
+            count: 0,
+        };
 
         command(&mut data);
 

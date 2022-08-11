@@ -1,4 +1,4 @@
-use crossterm::event::{Event, KeyEvent};
+use crossterm::event::{Event, KeyCode, KeyEvent};
 use kaka_core::shapes::{Point, Rect};
 
 use super::{widget::Widget, Context, EventResult};
@@ -11,9 +11,31 @@ use crate::{
 #[derive(Default)]
 pub struct EditorWidget {
     buffered_keys: Vec<KeyEvent>,
+    count: u16,
+    count_len: u8,
 }
 
 impl EditorWidget {
+    fn update_count(&mut self, event: KeyEvent) {
+        let code = event.code;
+
+        let count = match code {
+            KeyCode::Char(c) if ('0'..='9').contains(&c) => c,
+            _ => return,
+        };
+
+        if !self.buffered_keys.is_empty() {
+            self.count = 0;
+            self.count_len = 0;
+            self.buffered_keys.clear();
+            return;
+        }
+
+        let count = (count as u8 - b'0') as u16;
+        self.count += count * 10_u16.pow(self.count_len as u32);
+        self.count_len += 1;
+    }
+
     fn find_command(
         &mut self,
         keymaps: &Keymaps,
@@ -97,11 +119,16 @@ impl Widget for EditorWidget {
             _ => return EventResult::Ignored,
         };
 
+        self.update_count(key_event);
         let command = self.find_command(&ctx.editor.keymaps, buf, key_event);
 
         let is_insert = buf.mode().is_insert();
 
-        let mut context = editor::CommandData::new(ctx.editor, key_event);
+        let mut context = editor::CommandData {
+            editor: ctx.editor,
+            trigger: key_event,
+            count: self.count,
+        };
 
         // TODO delegate to Mode?
         if let Some(command) = command {
@@ -111,5 +138,28 @@ impl Widget for EditorWidget {
         }
 
         EventResult::Consumed
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crossterm::event::KeyModifiers;
+
+    use super::*;
+
+    #[test]
+    fn count() {
+        let mut editor = EditorWidget::default();
+        editor.update_count(KeyEvent {
+            code: KeyCode::Char('2'),
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(editor.count, 2);
+
+        editor.update_count(KeyEvent {
+            code: KeyCode::Char('2'),
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(editor.count, 22);
     }
 }
