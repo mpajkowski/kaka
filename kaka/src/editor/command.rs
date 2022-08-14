@@ -228,6 +228,7 @@ pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
     let (buf, doc) = current_mut!(ctx.editor);
 
     let text = doc.text_mut();
+
     let pos = buf.text_position;
 
     match event.code {

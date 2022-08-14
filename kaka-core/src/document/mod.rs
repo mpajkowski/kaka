@@ -85,7 +85,6 @@ impl Document {
 
         Ok(Self {
             id: DocumentId::next(),
-
             text,
             fs_metadata: Some(FilesystemMetadata {
                 path: path.into(),

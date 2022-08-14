@@ -41,14 +41,19 @@ impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin> App<C, E> {
         logger::enable(log_tx);
 
         // open paths from argv
-        for (idx, arg) in args.skip(1).enumerate() {
-            if let Err(e) = self.editor.open(&*arg, idx == 0) {
+        let mut opened = 0;
+        for arg in args.skip(1) {
+            if let Err(e) = self.editor.open(&*arg, opened == 0) {
                 log::error!("{e}");
+            } else {
+                opened += 1;
             }
         }
 
+        log::info!("Opened {opened} documents from args");
+
         // nothing opened (except logs) - create first scratch buffer
-        if self.editor.buffers.len() == 1 {
+        if opened == 0 {
             self.editor.open_scratch(true)?;
         }
 
