@@ -12,7 +12,7 @@ pub type CommandFn = fn(&mut CommandData);
 pub struct CommandData<'a> {
     pub editor: &'a mut Editor,
     pub trigger: KeyEvent,
-    pub count: u16,
+    pub count: usize,
 }
 
 #[derive(Clone)]
@@ -66,7 +66,7 @@ pub fn switch_to_insert_mode_after(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
     buf.switch_mode("insert");
-    buf.text_position = (buf.text_position + 1).min(doc.text().len_chars() - 1);
+    buf.text_position = (buf.text_position + 1).min(doc.text().len_chars());
 }
 
 pub fn switch_to_xd_mode(ctx: &mut CommandData) {
@@ -102,8 +102,8 @@ pub fn move_left(ctx: &mut CommandData) {
     let current_x = pos - line_start_idx;
 
     if current_x > 0 {
-        buf.text_position = buf.text_position.saturating_sub(1);
-        buf.saved_column = current_x.saturating_sub(1);
+        buf.text_position = buf.text_position.saturating_sub(ctx.count);
+        buf.saved_column = current_x.saturating_sub(ctx.count);
     }
 }
 
@@ -115,15 +115,14 @@ pub fn move_right(ctx: &mut CommandData) {
     let current_line_start = text.line_to_char(current_line_idx);
     let next_line_start = text.line_to_char(current_line_idx + 1);
 
-    let new_pos = buf.text_position + 1;
+    let mut new_pos = (buf.text_position + ctx.count)
+        .min(next_line_start)
+        .min(text.len_chars().saturating_sub(1));
 
-    let in_line = (current_line_start..next_line_start.saturating_sub(1)).contains(&new_pos);
-    let last_line = current_line_idx == text.len_lines() - 1 && new_pos < text.len_chars();
+    new_pos = new_pos.saturating_sub((text.chars_at(new_pos).next() == Some('\n')) as usize);
 
-    if in_line || last_line {
-        buf.text_position = new_pos;
-        buf.saved_column = new_pos - current_line_start;
-    }
+    buf.text_position = new_pos;
+    buf.saved_column = new_pos.saturating_sub(current_line_start);
 }
 
 pub fn move_up(ctx: &mut CommandData) {
@@ -133,11 +132,12 @@ pub fn move_up(ctx: &mut CommandData) {
     let current_line_idx = text.char_to_line(buf.text_position);
 
     if current_line_idx > 0 {
-        let prev_end = text.line_to_char(current_line_idx) - 1;
-        let prev_start = text.line_to_char(current_line_idx - 1);
+        let jump_to = current_line_idx.saturating_sub(ctx.count);
+        let jump_to_start = text.line_to_char(jump_to);
+        let jump_to_end = text.line_to_char(jump_to + 1).saturating_sub(1);
 
-        buf.text_position = prev_start
-            + (buf.saved_column).min(prev_end.saturating_sub(prev_start).saturating_sub(1));
+        buf.text_position = jump_to_start
+            + (buf.saved_column).min(jump_to_end.saturating_sub(jump_to_start).saturating_sub(1));
     }
 }
 
@@ -148,18 +148,13 @@ pub fn move_down(ctx: &mut CommandData) {
 
     let current_line_idx = text.char_to_line(buf.text_position);
 
-    // can't go beyond the last line
-    if current_line_idx == text.len_lines().saturating_sub(1) {
-        return;
-    }
+    let jump_to = (current_line_idx + ctx.count).min(text.len_lines() - 1);
 
-    let next_start = text.line_to_char(current_line_idx + 1);
-    let mut next_end = text.line_to_char(current_line_idx + 2);
+    let next_start = text.line_to_char(jump_to);
+    let mut next_end = text.line_to_char(jump_to + 1);
 
-    // handle special case: last line not ended with newline
-    if text.chars_at(next_end).reversed().next() == Some('\n') {
-        next_end -= 1;
-    }
+    next_end =
+        next_end.saturating_sub((text.chars_at(next_end).reversed().next() == Some('\n')) as usize);
 
     buf.text_position =
         next_start + (buf.saved_column).min(next_end.saturating_sub(next_start).saturating_sub(1));
@@ -306,7 +301,7 @@ mod test {
         let mut data = CommandData {
             editor: &mut editor,
             trigger: KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
-            count: 0,
+            count: 1,
         };
 
         command(&mut data);
@@ -342,6 +337,7 @@ mod test {
         test_cmd(0, "kaka\n", move_right, [|buf: B| buf.text_position == 1, |buf: B| buf.saved_column == 1]);
         test_cmd(1, "kaka\n", move_right, [|buf: B| buf.text_position == 2, |buf: B| buf.saved_column == 2]);
         test_cmd(2, "kaka\n", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column == 3]);
+        test_cmd(3, "kaka", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column == 3]);
         test_cmd(3, "kaka\n", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column == 3]);
         test_cmd(5, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 6, |buf: B| buf.saved_column == 1]);
         test_cmd(6, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 2]);
@@ -368,18 +364,6 @@ mod test {
 
     #[test]
     #[rustfmt::skip]
-    fn move_down_hops() {
-        let text = "0123\n567\n901";
-        test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 3]);
-        test_cmd(5, text, move_down, [|buf: B| buf.text_position == 9]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
-        test_cmd(9, text, move_down, [|buf: B| buf.text_position == 9]);
-        test_cmd(10, text, move_down, [|buf: B| buf.text_position == 10]);
-    }
-
-    #[test]
-    #[rustfmt::skip]
     fn move_up_simple() {
         let text = "012\n456\n890";
         test_cmd(0, text, move_up, [|buf: B| buf.text_position == 0]);
@@ -397,7 +381,7 @@ mod test {
 
     #[test]
     #[rustfmt::skip]
-    fn move_up_hops() {
+    fn move_down_hops() {
         let text = "0123\n567\n901";
         test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 3]);
         test_cmd(5, text, move_down, [|buf: B| buf.text_position == 9]);
@@ -405,5 +389,13 @@ mod test {
         test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
         test_cmd(9, text, move_down, [|buf: B| buf.text_position == 9]);
         test_cmd(10, text, move_down, [|buf: B| buf.text_position == 10]);
+        let text = "0123\n567\n901\n";
+        test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 3]);
+        test_cmd(5, text, move_down, [|buf: B| buf.text_position == 9]);
+        test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
+        test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
+        test_cmd(9, text, move_down, [|buf: B| buf.text_position == 13]);
+        test_cmd(10, text, move_down, [|buf: B| buf.text_position == 13]);
+        test_cmd(11, text, move_down, [|buf: B| buf.text_position == 13]);
     }
 }

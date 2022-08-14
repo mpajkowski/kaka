@@ -8,14 +8,21 @@ use crate::{
     editor::{self, insert_mode_on_key, Buffer, Command, KeymapTreeElement, Keymaps},
 };
 
+type Reset = bool;
+type Continue = bool;
+
 #[derive(Default)]
 pub struct EditorWidget {
     buffered_keys: Vec<KeyEvent>,
-    count: u16,
-    count_len: u8,
+    count: Option<usize>,
 }
 
 impl EditorWidget {
+    fn reset(&mut self) {
+        self.count = None;
+        self.buffered_keys.clear();
+    }
+
     fn update_count(&mut self, event: KeyEvent) {
         let code = event.code;
 
@@ -25,15 +32,25 @@ impl EditorWidget {
         };
 
         if !self.buffered_keys.is_empty() {
-            self.count = 0;
-            self.count_len = 0;
-            self.buffered_keys.clear();
+            self.reset();
             return;
         }
 
-        let count = (count as u8 - b'0') as u16;
-        self.count += count * 10_u16.pow(self.count_len as u32);
-        self.count_len += 1;
+        let count = (count as u8 - b'0') as usize;
+
+        let new_count = self
+            .count
+            .unwrap_or(0)
+            .checked_mul(10)
+            .and_then(|c| c.checked_add(count));
+
+        match new_count {
+            Some(c) => self.count = Some(c),
+            None => {
+                self.reset();
+                return;
+            }
+        }
     }
 
     fn find_command(
@@ -71,7 +88,7 @@ impl EditorWidget {
                     self.buffered_keys.clear();
                 }
                 Some(KeymapTreeElement::Node(_)) => self.buffered_keys.push(event),
-                None => self.buffered_keys.clear(),
+                None => self.reset(),
             },
             KeymapTreeElement::Node(_) => self.buffered_keys.push(event),
             KeymapTreeElement::Leaf(command) => {
@@ -127,14 +144,21 @@ impl Widget for EditorWidget {
         let mut context = editor::CommandData {
             editor: ctx.editor,
             trigger: key_event,
-            count: self.count,
+            count: self.count.unwrap_or(1),
         };
 
+        let mut reset = true;
         // TODO delegate to Mode?
         if let Some(command) = command {
             command.call(&mut context);
         } else if is_insert {
             insert_mode_on_key(&mut context, key_event);
+        } else {
+            reset = false;
+        }
+
+        if reset {
+            self.reset();
         }
 
         EventResult::Consumed
@@ -154,12 +178,18 @@ mod test {
             code: KeyCode::Char('2'),
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(editor.count, 2);
+        assert_eq!(editor.count, Some(2));
 
         editor.update_count(KeyEvent {
             code: KeyCode::Char('2'),
             modifiers: KeyModifiers::NONE,
         });
-        assert_eq!(editor.count, 22);
+        assert_eq!(editor.count, Some(22));
+
+        editor.update_count(KeyEvent {
+            code: KeyCode::Char('3'),
+            modifiers: KeyModifiers::NONE,
+        });
+        assert_eq!(editor.count, Some(223));
     }
 }
