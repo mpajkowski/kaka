@@ -12,7 +12,7 @@ pub trait Widget {
         true
     }
 
-    fn handle_event(&mut self, _: Event, _: &mut Context) -> EventResult {
+    fn handle_event(&mut self, _: &Event, _: &mut Context) -> EventResult {
         EventResult::Ignored
     }
 }

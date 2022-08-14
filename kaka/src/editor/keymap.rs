@@ -69,6 +69,8 @@ impl Keymap {
             ("j", move_down),
             ("k", move_up),
             ("l", move_right),
+            ("gg", goto_line_default_top),
+            ("G", goto_line_default_bottom),
             ("<Space>xd", switch_to_xd_mode),
             ("zs", save), // tmp
             ("ZZ", close),

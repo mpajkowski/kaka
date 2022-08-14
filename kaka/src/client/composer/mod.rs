@@ -65,7 +65,7 @@ impl Composer {
 
         let mut consumed = false;
         for widget in self.widgets.iter_mut().rev() {
-            if let EventResult::Consumed = widget.handle_event(event, ctx) {
+            if let EventResult::Consumed = widget.handle_event(&event, ctx) {
                 consumed = true;
                 break;
             }

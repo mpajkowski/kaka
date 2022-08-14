@@ -12,15 +12,7 @@ pub type CommandFn = fn(&mut CommandData);
 pub struct CommandData<'a> {
     pub editor: &'a mut Editor,
     pub trigger: KeyEvent,
-}
-
-impl<'a> CommandData<'a> {
-    pub fn new(editor: &'a mut Editor, key_event: KeyEvent) -> Self {
-        Self {
-            editor,
-            trigger: key_event,
-        }
-    }
+    pub count: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -74,7 +66,7 @@ pub fn switch_to_insert_mode_after(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
     buf.switch_mode("insert");
-    buf.text_position = (buf.text_position + 1).min(doc.text().len_chars() - 1);
+    buf.text_position = (buf.text_position + 1).min(doc.text().len_chars());
 }
 
 pub fn switch_to_xd_mode(ctx: &mut CommandData) {
@@ -96,10 +88,12 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
         let line_start = text.line_to_char(line_idx);
 
         buf.text_position = buf.text_position.saturating_sub(1).max(line_start);
+        buf.update_saved_column(doc);
     }
 }
 
 pub fn move_left(ctx: &mut CommandData) {
+    let count = ctx.count.unwrap_or(1);
     let (buf, doc) = current_mut!(ctx.editor);
 
     let pos = buf.text_position;
@@ -110,12 +104,13 @@ pub fn move_left(ctx: &mut CommandData) {
     let current_x = pos - line_start_idx;
 
     if current_x > 0 {
-        buf.text_position = buf.text_position.saturating_sub(1);
-        buf.saved_column = current_x.saturating_sub(1);
+        buf.text_position = buf.text_position.saturating_sub(count);
+        buf.saved_column = current_x.saturating_sub(count);
     }
 }
 
 pub fn move_right(ctx: &mut CommandData) {
+    let count = ctx.count.unwrap_or(1);
     let (buf, doc) = current_mut!(ctx.editor);
 
     let text = doc.text();
@@ -123,54 +118,90 @@ pub fn move_right(ctx: &mut CommandData) {
     let current_line_start = text.line_to_char(current_line_idx);
     let next_line_start = text.line_to_char(current_line_idx + 1);
 
-    let new_pos = buf.text_position + 1;
+    let mut new_pos = (buf.text_position + count)
+        .min(next_line_start)
+        .min(text.len_chars().saturating_sub(1));
 
-    let in_line = (current_line_start..next_line_start.saturating_sub(1)).contains(&new_pos);
-    let last_line = current_line_idx == text.len_lines() - 1 && new_pos < text.len_chars();
+    new_pos = new_pos.saturating_sub((text.chars_at(new_pos).next() == Some('\n')) as usize);
 
-    if in_line || last_line {
-        buf.text_position = new_pos;
-        buf.saved_column = new_pos - current_line_start;
-    }
+    buf.text_position = new_pos;
+    buf.saved_column = new_pos.saturating_sub(current_line_start);
 }
 
 pub fn move_up(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
-    let text = doc.text();
-    let current_line_idx = text.char_to_line(buf.text_position);
-
-    if current_line_idx > 0 {
-        let prev_end = text.line_to_char(current_line_idx) - 1;
-        let prev_start = text.line_to_char(current_line_idx - 1);
-
-        buf.text_position = prev_start
-            + (buf.saved_column).min(prev_end.saturating_sub(prev_start).saturating_sub(1));
-    }
+    goto_line_impl(
+        buf,
+        doc,
+        GotoLine::Offset(-(ctx.count.unwrap_or(1) as i128)),
+    );
 }
 
 pub fn move_down(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
+    goto_line_impl(buf, doc, GotoLine::Offset(ctx.count.unwrap_or(1) as i128));
+}
+
+pub fn goto_line_default_top(ctx: &mut CommandData) {
+    let (buf, doc) = current_mut!(ctx.editor);
+
+    let line = ctx.count.and_then(|c| c.checked_sub(1)).unwrap_or(0);
+
+    goto_line_impl(buf, doc, GotoLine::Fixed(line));
+}
+
+pub fn goto_line_default_bottom(ctx: &mut CommandData) {
+    let (buf, doc) = current_mut!(ctx.editor);
+
+    let line = ctx
+        .count
+        .and_then(|c| c.checked_sub(1))
+        .unwrap_or_else(|| doc.text().len_lines().saturating_sub(1));
+
+    goto_line_impl(buf, doc, GotoLine::Fixed(line));
+}
+
+#[derive(Debug, Clone, Copy)]
+enum GotoLine {
+    Fixed(usize),
+    Offset(i128),
+}
+
+impl GotoLine {
+    fn to_line(self, buf: &Buffer, doc: &Document) -> usize {
+        let text = doc.text();
+        let limit = text.len_lines().saturating_sub(1);
+
+        match self {
+            GotoLine::Fixed(line) => line.min(limit),
+            GotoLine::Offset(offset) => {
+                let pos = buf.text_position;
+                let curr_line_start = text.char_to_line(pos);
+
+                ((curr_line_start as i128).saturating_add(offset)).clamp(0, limit as i128) as usize
+            }
+        }
+    }
+}
+
+fn goto_line_impl(buf: &mut Buffer, doc: &Document, goto_line: GotoLine) {
     let text = doc.text();
 
-    let current_line_idx = text.char_to_line(buf.text_position);
+    let goto_line_idx = goto_line.to_line(buf, doc);
+    let goto_line_start = text.line_to_char(goto_line_idx);
+    let goto_line_end = text.line_to_char(goto_line_idx + 1).saturating_sub(1);
 
-    // can't go beyond the last line
-    if current_line_idx == text.len_lines().saturating_sub(1) {
-        return;
+    let mut new_pos = (goto_line_start + buf.saved_column).min(goto_line_end);
+
+    if text.char(new_pos) == '\n' {
+        new_pos = new_pos.saturating_sub(1);
     }
 
-    let next_start = text.line_to_char(current_line_idx + 1);
-    let mut next_end = text.line_to_char(current_line_idx + 2);
+    new_pos = new_pos.max(goto_line_start);
 
-    // handle special case: last line not ended with newline
-    if text.chars_at(next_end).reversed().next() == Some('\n') {
-        next_end -= 1;
-    }
-
-    buf.text_position =
-        next_start + (buf.saved_column).min(next_end.saturating_sub(next_start).saturating_sub(1));
+    buf.text_position = new_pos;
 }
 
 pub fn remove_char(ctx: &mut CommandData) {
@@ -197,6 +228,7 @@ pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
     let (buf, doc) = current_mut!(ctx.editor);
 
     let text = doc.text_mut();
+
     let pos = buf.text_position;
 
     match event.code {
@@ -311,10 +343,11 @@ mod test {
 
         editor.add_buffer_and_document(buffer, document, true);
 
-        let mut data = CommandData::new(
-            &mut editor,
-            KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
-        );
+        let mut data = CommandData {
+            editor: &mut editor,
+            trigger: KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
+            count: Some(1),
+        };
 
         command(&mut data);
 
@@ -349,6 +382,7 @@ mod test {
         test_cmd(0, "kaka\n", move_right, [|buf: B| buf.text_position == 1, |buf: B| buf.saved_column == 1]);
         test_cmd(1, "kaka\n", move_right, [|buf: B| buf.text_position == 2, |buf: B| buf.saved_column == 2]);
         test_cmd(2, "kaka\n", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column == 3]);
+        test_cmd(3, "kaka", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column == 3]);
         test_cmd(3, "kaka\n", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column == 3]);
         test_cmd(5, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 6, |buf: B| buf.saved_column == 1]);
         test_cmd(6, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 2]);
@@ -375,18 +409,6 @@ mod test {
 
     #[test]
     #[rustfmt::skip]
-    fn move_down_hops() {
-        let text = "0123\n567\n901";
-        test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 3]);
-        test_cmd(5, text, move_down, [|buf: B| buf.text_position == 9]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
-        test_cmd(9, text, move_down, [|buf: B| buf.text_position == 9]);
-        test_cmd(10, text, move_down, [|buf: B| buf.text_position == 10]);
-    }
-
-    #[test]
-    #[rustfmt::skip]
     fn move_up_simple() {
         let text = "012\n456\n890";
         test_cmd(0, text, move_up, [|buf: B| buf.text_position == 0]);
@@ -404,7 +426,7 @@ mod test {
 
     #[test]
     #[rustfmt::skip]
-    fn move_up_hops() {
+    fn move_down_hops() {
         let text = "0123\n567\n901";
         test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 3]);
         test_cmd(5, text, move_down, [|buf: B| buf.text_position == 9]);
@@ -412,5 +434,15 @@ mod test {
         test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
         test_cmd(9, text, move_down, [|buf: B| buf.text_position == 9]);
         test_cmd(10, text, move_down, [|buf: B| buf.text_position == 10]);
+        let text = "0123\n567\n901\n\n\n";
+        test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 3]);
+        test_cmd(5, text, move_down, [|buf: B| buf.text_position == 9]);
+        test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
+        test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
+        test_cmd(9, text, move_down, [|buf: B| buf.text_position == 13]);
+        test_cmd(10, text, move_down, [|buf: B| buf.text_position == 13]);
+        test_cmd(11, text, move_down, [|buf: B| buf.text_position == 13]);
+        test_cmd(13, text, move_down, [|buf: B| buf.text_position == 14]);
+        test_cmd(14, text, move_down, [|buf: B| buf.text_position == 15]);
     }
 }

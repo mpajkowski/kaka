@@ -1,5 +1,5 @@
 use anyhow::{bail, ensure, Context, Result};
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyEventState, KeyModifiers};
 
 pub fn parse_mapping(chars: &str) -> Result<Vec<KeyEvent>> {
     let tokens = to_tokens(chars)?;
@@ -113,7 +113,12 @@ fn to_known_special_keyevent(string: &str) -> Option<KeyEvent> {
         _ => return None,
     };
 
-    Some(KeyEvent { code, modifiers })
+    Some(KeyEvent {
+        code,
+        modifiers,
+        kind: KeyEventKind::Press,
+        state: KeyEventState::NONE,
+    })
 }
 
 #[cfg(test)]

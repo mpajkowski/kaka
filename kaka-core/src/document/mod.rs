@@ -85,7 +85,6 @@ impl Document {
 
         Ok(Self {
             id: DocumentId::next(),
-
             text,
             fs_metadata: Some(FilesystemMetadata {
                 path: path.into(),
@@ -119,7 +118,7 @@ impl Document {
         self.transaction.as_mut()
     }
 
-    pub fn transaction(&self) -> Option<&Transaction> {
+    pub const fn transaction(&self) -> Option<&Transaction> {
         self.transaction.as_ref()
     }
 
