@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-crossterm = { version = "0.24.0", features = ["futures-core", "event-stream"] }
+crossterm = { version = "0.25.0", features = ["futures-core", "event-stream"] }
 thiserror = "1.0.31"
 
 kaka-core = { path = "../kaka-core" }

@@ -8,13 +8,11 @@ use crate::{
     editor::{self, insert_mode_on_key, Buffer, Command, KeymapTreeElement, Keymaps},
 };
 
-type Reset = bool;
-type Continue = bool;
-
 #[derive(Default)]
 pub struct EditorWidget {
     buffered_keys: Vec<KeyEvent>,
     count: Option<usize>,
+    insert_on: bool,
 }
 
 impl EditorWidget {
@@ -24,6 +22,10 @@ impl EditorWidget {
     }
 
     fn update_count(&mut self, event: KeyEvent) {
+        if self.insert_on {
+            return;
+        }
+
         let code = event.code;
 
         let count = match code {
@@ -59,6 +61,10 @@ impl EditorWidget {
         buffer: &Buffer,
         event: KeyEvent,
     ) -> Option<Command> {
+        if self.insert_on {
+            return None;
+        }
+
         let (chain, keymap_element) = {
             let keymap = keymaps.keymap_for_mode(buffer.mode()).unwrap();
 
@@ -128,16 +134,16 @@ impl Widget for EditorWidget {
         }
     }
 
-    fn handle_event(&mut self, event: Event, ctx: &mut Context) -> super::EventResult {
+    fn handle_event(&mut self, event: &Event, ctx: &mut Context) -> super::EventResult {
         let (buf, _) = current_mut!(ctx.editor);
 
         let key_event = match event {
-            Event::Key(ev) => ev,
+            Event::Key(ev) => *ev,
             _ => return EventResult::Ignored,
         };
 
         self.update_count(key_event);
-        let command = self.find_command(&ctx.editor.keymaps, buf, key_event);
+        let command = self.find_command(&ctx.editor.keymaps, buf, key_event.clone());
 
         let is_insert = buf.mode().is_insert();
 
@@ -147,18 +153,12 @@ impl Widget for EditorWidget {
             count: self.count,
         };
 
-        let mut reset = true;
         // TODO delegate to Mode?
         if let Some(command) = command {
             command.call(&mut context);
+            self.reset();
         } else if is_insert {
             insert_mode_on_key(&mut context, key_event);
-        } else {
-            reset = false;
-        }
-
-        if reset {
-            self.reset();
         }
 
         EventResult::Consumed
@@ -167,29 +167,28 @@ impl Widget for EditorWidget {
 
 #[cfg(test)]
 mod test {
-    use crossterm::event::KeyModifiers;
+    use crossterm::event::{KeyEventKind, KeyEventState, KeyModifiers};
 
     use super::*;
 
     #[test]
     fn count() {
-        let mut editor = EditorWidget::default();
-        editor.update_count(KeyEvent {
+        let mut event = KeyEvent {
             code: KeyCode::Char('2'),
             modifiers: KeyModifiers::NONE,
-        });
+            kind: KeyEventKind::Press,
+            state: KeyEventState::NONE,
+        };
+
+        let mut editor = EditorWidget::default();
+        editor.update_count(event);
         assert_eq!(editor.count, Some(2));
 
-        editor.update_count(KeyEvent {
-            code: KeyCode::Char('2'),
-            modifiers: KeyModifiers::NONE,
-        });
+        editor.update_count(event);
         assert_eq!(editor.count, Some(22));
 
-        editor.update_count(KeyEvent {
-            code: KeyCode::Char('3'),
-            modifiers: KeyModifiers::NONE,
-        });
+        event.code = KeyCode::Char('3');
+        editor.update_count(event);
         assert_eq!(editor.count, Some(223));
     }
 }
