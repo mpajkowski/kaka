@@ -144,7 +144,7 @@ impl Widget for EditorWidget {
         let mut context = editor::CommandData {
             editor: ctx.editor,
             trigger: key_event,
-            count: self.count.unwrap_or(1),
+            count: self.count,
         };
 
         let mut reset = true;

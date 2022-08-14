@@ -63,21 +63,28 @@ impl Buffer {
             "Start position {pos} is out of bounds"
         );
 
-        let start_line_idx = text.char_to_line(pos);
-        let start_line_pos = text.line_to_char(start_line_idx);
-        let saved_column = pos - start_line_pos;
-
         let mut this = Self {
             id: BufferId::next(),
             document_id: document.id(),
             avail_modes: avail_modes.into_iter().collect(),
             current_mode: 0,
             text_position: pos,
-            saved_column,
+            saved_column: 0,
         };
+
         this.set_mode_impl(start_mode.name())?;
+        this.update_saved_column(document);
 
         Ok(this)
+    }
+
+    pub fn update_saved_column(&mut self, doc: &Document) {
+        let text = doc.text();
+        let pos = self.text_position;
+
+        let start_line_idx = text.char_to_line(pos);
+        let start_line_pos = text.line_to_char(start_line_idx);
+        self.saved_column = pos - start_line_pos;
     }
 
     pub const fn id(&self) -> BufferId {

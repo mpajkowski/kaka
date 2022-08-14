@@ -63,10 +63,7 @@ impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin> App<C, E> {
         loop {
             let should_redraw = tokio::select! {
                 Some(ev) = term_events.next() => {
-                    let ev = ev?;
-
-                    log::debug!("Event: {ev:?}");
-                    self.on_term_event(ev)
+                    self.on_term_event(ev?)
                 },
                 Some(log) = log_rx.recv() => {
                     self.on_log(log)

@@ -12,7 +12,7 @@ pub type CommandFn = fn(&mut CommandData);
 pub struct CommandData<'a> {
     pub editor: &'a mut Editor,
     pub trigger: KeyEvent,
-    pub count: usize,
+    pub count: Option<usize>,
 }
 
 #[derive(Clone)]
@@ -88,10 +88,12 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
         let line_start = text.line_to_char(line_idx);
 
         buf.text_position = buf.text_position.saturating_sub(1).max(line_start);
+        buf.update_saved_column(doc);
     }
 }
 
 pub fn move_left(ctx: &mut CommandData) {
+    let count = ctx.count.unwrap_or(1);
     let (buf, doc) = current_mut!(ctx.editor);
 
     let pos = buf.text_position;
@@ -102,12 +104,13 @@ pub fn move_left(ctx: &mut CommandData) {
     let current_x = pos - line_start_idx;
 
     if current_x > 0 {
-        buf.text_position = buf.text_position.saturating_sub(ctx.count);
-        buf.saved_column = current_x.saturating_sub(ctx.count);
+        buf.text_position = buf.text_position.saturating_sub(count);
+        buf.saved_column = current_x.saturating_sub(count);
     }
 }
 
 pub fn move_right(ctx: &mut CommandData) {
+    let count = ctx.count.unwrap_or(1);
     let (buf, doc) = current_mut!(ctx.editor);
 
     let text = doc.text();
@@ -115,7 +118,7 @@ pub fn move_right(ctx: &mut CommandData) {
     let current_line_start = text.line_to_char(current_line_idx);
     let next_line_start = text.line_to_char(current_line_idx + 1);
 
-    let mut new_pos = (buf.text_position + ctx.count)
+    let mut new_pos = (buf.text_position + count)
         .min(next_line_start)
         .min(text.len_chars().saturating_sub(1));
 
@@ -128,36 +131,77 @@ pub fn move_right(ctx: &mut CommandData) {
 pub fn move_up(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
-    let text = doc.text();
-    let current_line_idx = text.char_to_line(buf.text_position);
-
-    if current_line_idx > 0 {
-        let jump_to = current_line_idx.saturating_sub(ctx.count);
-        let jump_to_start = text.line_to_char(jump_to);
-        let jump_to_end = text.line_to_char(jump_to + 1).saturating_sub(1);
-
-        buf.text_position = jump_to_start
-            + (buf.saved_column).min(jump_to_end.saturating_sub(jump_to_start).saturating_sub(1));
-    }
+    goto_line_impl(
+        buf,
+        doc,
+        GotoLine::Offset(-(ctx.count.unwrap_or(1) as i128)),
+    );
 }
 
 pub fn move_down(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
+    goto_line_impl(buf, doc, GotoLine::Offset(ctx.count.unwrap_or(1) as i128));
+}
+
+pub fn goto_line_default_top(ctx: &mut CommandData) {
+    let (buf, doc) = current_mut!(ctx.editor);
+
+    let line = ctx.count.and_then(|c| c.checked_sub(1)).unwrap_or(0);
+
+    goto_line_impl(buf, doc, GotoLine::Fixed(line));
+}
+
+pub fn goto_line_default_bottom(ctx: &mut CommandData) {
+    let (buf, doc) = current_mut!(ctx.editor);
+
+    let line = ctx
+        .count
+        .and_then(|c| c.checked_sub(1))
+        .unwrap_or_else(|| doc.text().len_lines().saturating_sub(1));
+
+    goto_line_impl(buf, doc, GotoLine::Fixed(line));
+}
+
+#[derive(Debug, Clone, Copy)]
+enum GotoLine {
+    Fixed(usize),
+    Offset(i128),
+}
+
+impl GotoLine {
+    fn to_line(self, buf: &Buffer, doc: &Document) -> usize {
+        let text = doc.text();
+        let limit = text.len_lines().saturating_sub(1);
+
+        match self {
+            GotoLine::Fixed(line) => line.min(limit),
+            GotoLine::Offset(offset) => {
+                let pos = buf.text_position;
+                let curr_line_start = text.char_to_line(pos);
+
+                ((curr_line_start as i128).saturating_add(offset)).clamp(0, limit as i128) as usize
+            }
+        }
+    }
+}
+
+fn goto_line_impl(buf: &mut Buffer, doc: &Document, goto_line: GotoLine) {
     let text = doc.text();
 
-    let current_line_idx = text.char_to_line(buf.text_position);
+    let goto_line_idx = goto_line.to_line(buf, doc);
+    let goto_line_start = text.line_to_char(goto_line_idx);
+    let goto_line_end = text.line_to_char(goto_line_idx + 1).saturating_sub(1);
 
-    let jump_to = (current_line_idx + ctx.count).min(text.len_lines() - 1);
+    let mut new_pos = (goto_line_start + buf.saved_column).min(goto_line_end);
 
-    let next_start = text.line_to_char(jump_to);
-    let mut next_end = text.line_to_char(jump_to + 1);
+    if text.char(new_pos) == '\n' {
+        new_pos = new_pos.saturating_sub(1);
+    }
 
-    next_end =
-        next_end.saturating_sub((text.chars_at(next_end).reversed().next() == Some('\n')) as usize);
+    new_pos = new_pos.max(goto_line_start);
 
-    buf.text_position =
-        next_start + (buf.saved_column).min(next_end.saturating_sub(next_start).saturating_sub(1));
+    buf.text_position = new_pos;
 }
 
 pub fn remove_char(ctx: &mut CommandData) {
@@ -301,7 +345,7 @@ mod test {
         let mut data = CommandData {
             editor: &mut editor,
             trigger: KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
-            count: 1,
+            count: Some(1),
         };
 
         command(&mut data);
@@ -389,7 +433,7 @@ mod test {
         test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
         test_cmd(9, text, move_down, [|buf: B| buf.text_position == 9]);
         test_cmd(10, text, move_down, [|buf: B| buf.text_position == 10]);
-        let text = "0123\n567\n901\n";
+        let text = "0123\n567\n901\n\n\n";
         test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 3]);
         test_cmd(5, text, move_down, [|buf: B| buf.text_position == 9]);
         test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
@@ -397,5 +441,7 @@ mod test {
         test_cmd(9, text, move_down, [|buf: B| buf.text_position == 13]);
         test_cmd(10, text, move_down, [|buf: B| buf.text_position == 13]);
         test_cmd(11, text, move_down, [|buf: B| buf.text_position == 13]);
+        test_cmd(13, text, move_down, [|buf: B| buf.text_position == 14]);
+        test_cmd(14, text, move_down, [|buf: B| buf.text_position == 15]);
     }
 }
