@@ -1,0 +1,13 @@
+[package]
+name = "kaka-treesitter"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+kaka-core = { path = "../kaka-core" }
+tree-sitter = "0.20.8"
+cc = "1"
+libloading-mini = "0.1"
+once_cell = "1.13.0"
+anyhow = "1.0.61"
+log = "0.4.17"

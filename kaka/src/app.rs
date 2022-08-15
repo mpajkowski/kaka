@@ -8,21 +8,26 @@ use crate::{
 use crossterm::event::Event;
 use futures_util::{Stream, StreamExt};
 use kaka_core::{document::Document, ropey::Rope};
+use kaka_treesitter::LanguageLoader;
 use tokio::sync::mpsc;
 
 use crate::Client;
 
-pub struct App<C, E> {
+pub struct App<C, E, L> {
     client: Client<C>,
+    lang_loader: L,
     editor: Editor,
     e: PhantomData<E>,
 }
 
-impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin> App<C, E> {
-    pub fn new(client: Client<C>) -> Self {
+impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin, L: LanguageLoader>
+    App<C, E, L>
+{
+    pub fn new(client: Client<C>, lang_loader: L) -> Self {
         Self {
             client,
             editor: Editor::init(),
+            lang_loader,
             e: PhantomData,
         }
     }

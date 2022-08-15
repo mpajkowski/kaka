@@ -1,0 +1,4 @@
+rust:
+  extensions:
+    - rs
+  treesitter: "tree-sitter-rust"
