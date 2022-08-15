@@ -2,7 +2,7 @@ use anyhow::Result;
 
 use kaka_core::shapes::{Point, Rect};
 
-use super::Cell;
+use super::surface::Cell;
 
 pub trait Canvas {
     fn draw<'a, I: Iterator<Item = (Point, &'a Cell)>>(&mut self, contents: I) -> Result<()>;

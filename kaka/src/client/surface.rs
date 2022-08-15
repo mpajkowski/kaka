@@ -4,7 +4,7 @@ use kaka_core::shapes::{Point, Rect};
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use super::{style::Style, Color, Modifier};
+use super::style::{Color, Modifier, Style};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Cell {

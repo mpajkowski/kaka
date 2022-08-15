@@ -25,6 +25,7 @@ pub struct Editor {
     pub buffered_keys: Vec<KeyEvent>,
     pub exit_code: Option<i32>,
     pub keymaps: Keymaps,
+    logger: BufferId,
 }
 
 impl Editor {
@@ -37,7 +38,8 @@ impl Editor {
         Self {
             buffers: BTreeMap::new(),
             documents: HashMap::new(),
-            current: BufferId::LOGGER,
+            current: BufferId::MAX,
+            logger: BufferId::MAX,
             buffered_keys: Vec::new(),
             exit_code: None,
             keymaps,
@@ -87,15 +89,19 @@ impl Editor {
         self.exit_code.is_some()
     }
 
+    pub fn set_logger(&mut self, id: BufferId) {
+        self.logger = id;
+    }
+
     pub fn on_log(&mut self, log: Rope) -> bool {
-        let log_doc = self
+        if let Some(log_doc) = self
             .buffers
-            .get(&BufferId::LOGGER)
+            .get(&self.logger)
             .and_then(|buf| self.documents.get_mut(&buf.document_id()))
-            .expect("logging not initialized");
+        {
+            log_doc.text_mut().append(log);
+        }
 
-        log_doc.text_mut().append(log);
-
-        self.current == BufferId::LOGGER
+        self.current == self.logger
     }
 }

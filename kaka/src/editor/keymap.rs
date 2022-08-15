@@ -75,6 +75,7 @@ impl Keymap {
             ("zs", save), // tmp
             ("ZZ", close),
             ("x", remove_char),
+            (":", command_mode),
             // buffer
             ("<TAB>", buffer_next),
             ("<S-TAB>", buffer_prev),

@@ -1,9 +1,12 @@
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use kaka_core::shapes::{Point, Rect};
 
-use super::{widget::Widget, Context, EventResult};
+use super::{widget::Widget, Context, EventOutcome, EventResult};
 use crate::{
-    client::{surface::Surface, Color, Style},
+    client::{
+        style::{Color, Style},
+        surface::Surface,
+    },
     current, current_mut,
     editor::{self, insert_mode_on_key, Buffer, Command, KeymapTreeElement, Keymaps},
 };
@@ -82,6 +85,7 @@ impl EditorWidget {
         for buf_key in self.buffered_keys.iter().skip(1) {
             keymap_element = match keymap_element {
                 KeymapTreeElement::Node(k) => k.feed(*buf_key).unwrap(),
+                // keys are buffered...
                 KeymapTreeElement::Leaf(_) => unreachable!(),
             };
         }
@@ -93,9 +97,11 @@ impl EditorWidget {
                     call = Some(command.clone());
                     self.buffered_keys.clear();
                 }
+                // ...here
                 Some(KeymapTreeElement::Node(_)) => self.buffered_keys.push(event),
                 None => self.reset(),
             },
+            // ...and here
             KeymapTreeElement::Node(_) => self.buffered_keys.push(event),
             KeymapTreeElement::Leaf(command) => {
                 call = Some(command.clone());
@@ -134,12 +140,12 @@ impl Widget for EditorWidget {
         }
     }
 
-    fn handle_event(&mut self, event: &Event, ctx: &mut Context) -> super::EventResult {
+    fn handle_event(&mut self, event: &Event, ctx: &mut Context) -> super::EventOutcome {
         let (buf, _) = current_mut!(ctx.editor);
 
         let key_event = match event {
             Event::Key(ev) => *ev,
-            _ => return EventResult::Ignored,
+            _ => return EventOutcome::ignored(),
         };
 
         self.update_count(key_event);
@@ -151,6 +157,7 @@ impl Widget for EditorWidget {
             editor: ctx.editor,
             trigger: key_event,
             count: self.count,
+            callback: None,
         };
 
         // TODO delegate to Mode?
@@ -161,7 +168,12 @@ impl Widget for EditorWidget {
             insert_mode_on_key(&mut context, key_event);
         }
 
-        EventResult::Consumed
+        let callback = context.callback;
+
+        EventOutcome {
+            callback,
+            result: EventResult::Consumed,
+        }
     }
 }
 

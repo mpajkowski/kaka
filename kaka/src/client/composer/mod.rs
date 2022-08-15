@@ -1,30 +1,72 @@
 mod editor;
+mod prompt;
 mod widget;
+
+use std::{any::TypeId, fmt};
 
 use crossterm::event::Event;
 pub use editor::EditorWidget;
+pub use prompt::PromptWidget;
 
 use kaka_core::shapes::{Point, Rect};
 
 use crate::{current, editor::Editor};
 
-use self::widget::Widget;
+pub use self::widget::Widget;
 
 use super::{canvas::Canvas, surface::Surface};
+
+pub type Callback = Box<dyn FnOnce(&mut Composer)>;
 
 pub struct Context<'a> {
     pub editor: &'a mut Editor,
 }
 
 pub struct Composer {
-    widgets: Vec<Box<dyn Widget>>,
+    widgets: Vec<(TypeId, Box<dyn Widget>)>,
     surfaces: Surfaces,
     cursor: Point,
 }
 
+pub struct EventOutcome {
+    pub callback: Option<Callback>,
+    pub result: EventResult,
+}
+
+impl fmt::Debug for EventOutcome {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EventOutcome")
+            .field("callback", &self.callback.as_ref().map(|_| "with callback"))
+            .field("result", &self.result)
+            .finish()
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum EventResult {
     Ignored,
     Consumed,
+}
+
+impl EventOutcome {
+    pub fn ignored() -> Self {
+        Self {
+            callback: None,
+            result: EventResult::Ignored,
+        }
+    }
+
+    pub fn consumed() -> Self {
+        Self {
+            callback: None,
+            result: EventResult::Consumed,
+        }
+    }
+
+    pub fn callback(mut self, c: impl FnOnce(&mut Composer) + 'static) -> Self {
+        self.callback = Some(Box::new(c));
+        self
+    }
 }
 
 impl Composer {
@@ -46,7 +88,7 @@ impl Composer {
         let current_surface = self.surfaces.surface_mut();
         let area = current_surface.area;
 
-        for w in &self.widgets {
+        for (_, w) in &self.widgets {
             w.draw(area, current_surface, ctx);
         }
 
@@ -64,11 +106,18 @@ impl Composer {
         };
 
         let mut consumed = false;
-        for widget in self.widgets.iter_mut().rev() {
-            if let EventResult::Consumed = widget.handle_event(&event, ctx) {
-                consumed = true;
+        let mut callbacks = vec![];
+        for (_, widget) in self.widgets.iter_mut().rev() {
+            let EventOutcome { callback, result } = widget.handle_event(&event, ctx);
+            callbacks.extend(callback);
+            consumed = result == EventResult::Consumed;
+            if consumed {
                 break;
             }
+        }
+
+        for callback in callbacks {
+            callback(self);
         }
 
         let surface = self.surfaces.surface();
@@ -87,7 +136,12 @@ impl Composer {
     }
 
     pub fn push_widget<W: Widget + 'static>(&mut self, widget: W) {
-        self.widgets.push(Box::new(widget));
+        self.widgets.push((TypeId::of::<W>(), Box::new(widget)));
+    }
+
+    pub fn remove_widget<W: Widget>(&mut self) {
+        self.widgets
+            .retain(|(type_id, _)| *type_id != TypeId::of::<W>());
     }
 }
 

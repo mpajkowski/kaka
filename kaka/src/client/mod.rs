@@ -1,20 +1,18 @@
-mod canvas;
-mod composer;
-mod crossterm_impl;
-mod style;
-mod surface;
+pub mod canvas;
+pub mod composer;
+pub mod style;
+pub mod surface;
 
-pub use composer::{Composer, EditorWidget};
+mod crossterm_impl;
+
 use crossterm::event::Event;
 pub use crossterm_impl::CrosstermCanvas;
-pub use style::*;
-pub use surface::Cell;
 
 use anyhow::Result;
 
 use crate::editor::Editor;
 
-use self::composer::Context;
+use self::composer::{Composer, Context};
 
 pub use self::canvas::Canvas;
 

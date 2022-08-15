@@ -1,19 +1,24 @@
 use anyhow::{ensure, Context, Result};
 use kaka_core::document::{Document, DocumentId};
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    num::NonZeroUsize,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 use super::Mode;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BufferId(pub(crate) usize);
+pub struct BufferId(NonZeroUsize);
 
 impl BufferId {
-    pub const LOGGER: Self = Self(usize::MAX);
+    pub const MAX: BufferId = Self(unsafe { NonZeroUsize::new_unchecked(usize::MAX) });
 
     pub fn next() -> Self {
         pub static IDS: AtomicUsize = AtomicUsize::new(1);
-        let next = IDS.fetch_add(1, Ordering::SeqCst);
+
+        let next = NonZeroUsize::new(IDS.fetch_add(1, Ordering::SeqCst))
+            .expect("BufferId counter overflowed");
 
         Self(next)
     }
@@ -25,6 +30,7 @@ pub struct Buffer {
     document_id: DocumentId,
     avail_modes: Vec<Mode>,
     current_mode: usize,
+    immortal: bool,
     pub text_position: usize,
     pub saved_column: usize,
 }
@@ -36,18 +42,12 @@ impl Buffer {
             [Mode::Normal, Mode::Xd, Mode::Insert],
             document,
             &Mode::Normal,
+            false,
         )
     }
 
     pub fn new_logging(document: &Document) -> Self {
-        Self {
-            id: BufferId::LOGGER,
-            document_id: document.id(),
-            avail_modes: vec![Mode::Normal],
-            current_mode: 0,
-            text_position: 0,
-            saved_column: 0,
-        }
+        Self::new(0, vec![Mode::Normal], document, &Mode::Normal, true).unwrap()
     }
 
     pub fn new(
@@ -55,6 +55,7 @@ impl Buffer {
         avail_modes: impl IntoIterator<Item = Mode>,
         document: &Document,
         start_mode: &Mode,
+        immortal: bool,
     ) -> Result<Self> {
         let text = document.text();
 
@@ -70,6 +71,7 @@ impl Buffer {
             current_mode: 0,
             text_position: pos,
             saved_column: 0,
+            immortal,
         };
 
         this.set_mode_impl(start_mode.name())?;
@@ -105,7 +107,7 @@ impl Buffer {
     }
 
     pub fn immortal(&self) -> bool {
-        self.id == BufferId::LOGGER
+        self.immortal
     }
 
     fn set_mode_impl(&mut self, mode: &str) -> Result<()> {
@@ -159,7 +161,7 @@ mod test {
         let modes = [Mode::Normal, Mode::Insert];
 
         let document = Document::new_scratch();
-        let mut buffer = Buffer::new(0, modes, &document, &Mode::Normal).unwrap();
+        let mut buffer = Buffer::new(0, modes, &document, &Mode::Normal, false).unwrap();
         assert!(matches!(buffer.mode(), &Mode::Normal));
 
         buffer.switch_mode("insert");

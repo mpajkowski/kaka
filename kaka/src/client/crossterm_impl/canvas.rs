@@ -14,7 +14,11 @@ use crossterm::{
 
 use kaka_core::shapes::{Point, Rect};
 
-use crate::client::{Canvas, Cell, Color, Modifier};
+use crate::client::{
+    style::{Color, Modifier},
+    surface::Cell,
+    Canvas,
+};
 
 use super::RawTerminalGuard;
 

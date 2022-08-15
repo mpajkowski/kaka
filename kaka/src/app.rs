@@ -1,7 +1,7 @@
 use std::{env::Args, io, marker::PhantomData};
 
+use crate::client::composer::EditorWidget;
 use crate::{
-    client::EditorWidget,
     editor::{Buffer, Editor},
     logger, Canvas,
 };
@@ -31,10 +31,12 @@ impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin> App<C, E> {
         // init logging
         let log_document = Document::new_scratch();
         let buffer = Buffer::new_logging(&log_document);
-        self.editor.buffers.insert(buffer.id(), buffer);
+        let logger_id = buffer.id();
+        self.editor.buffers.insert(logger_id, buffer);
         self.editor
             .documents
             .insert(log_document.id(), log_document);
+        self.editor.set_logger(logger_id);
 
         let (log_tx, mut log_rx) = mpsc::unbounded_channel();
 

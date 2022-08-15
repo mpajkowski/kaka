@@ -3,7 +3,11 @@ use std::{borrow::Cow, fmt::Debug};
 use crossterm::event::{KeyCode, KeyEvent};
 use kaka_core::document::Document;
 
-use crate::{current, current_mut};
+use crate::{
+    client::composer::{Callback, PromptWidget, Widget},
+    current, current_mut,
+    editor::Mode,
+};
 
 use super::{Buffer, Editor};
 
@@ -13,6 +17,15 @@ pub struct CommandData<'a> {
     pub editor: &'a mut Editor,
     pub trigger: KeyEvent,
     pub count: Option<usize>,
+    pub callback: Option<Callback>,
+}
+
+impl<'a> CommandData<'a> {
+    fn push_widget<W: Widget + 'static>(&mut self, widget: W) {
+        self.callback = Some(Box::new(move |composer| {
+            composer.push_widget(widget);
+        }))
+    }
 }
 
 #[derive(Clone)]
@@ -227,6 +240,8 @@ pub fn remove_char(ctx: &mut CommandData) {
 pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
     let (buf, doc) = current_mut!(ctx.editor);
 
+    debug_assert!(matches!(buf.mode(), Mode::Insert));
+
     let text = doc.text_mut();
 
     let pos = buf.text_position;
@@ -310,6 +325,10 @@ pub fn buffer_kill(ctx: &mut CommandData) {
     }
 }
 
+pub fn command_mode(ctx: &mut CommandData) {
+    ctx.push_widget(PromptWidget::new(':'));
+}
+
 #[macro_export]
 macro_rules! command {
     ($fun: ident) => {{
@@ -347,6 +366,7 @@ mod test {
             editor: &mut editor,
             trigger: KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
             count: Some(1),
+            callback: None,
         };
 
         command(&mut data);
