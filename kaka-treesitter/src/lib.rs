@@ -18,6 +18,8 @@ impl LanguageLoader for Languages {
             None => return Ok(None),
         };
 
+        log::info!("Loading language {lang}");
+
         let lang = match load_lang(repo)? {
             Some(lang) => lang,
             None => return Ok(None),
@@ -38,6 +40,7 @@ fn load_lang(repo: &str) -> Result<Option<Language>> {
     dlpath.set_extension("so");
 
     if !dlpath.exists() {
+        log::info!("Compiling {repo}");
         let src_path = langpath.join("src").join(repo).join("src");
         if !src_path.exists() {
             return Ok(None);

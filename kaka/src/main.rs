@@ -19,7 +19,6 @@ use crossterm::event::EventStream;
 
 pub use client::Canvas;
 use kaka_core::languages::Languages;
-use kaka_treesitter::LanguageLoader;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
