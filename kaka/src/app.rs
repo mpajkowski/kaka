@@ -1,4 +1,4 @@
-use std::{env::Args, io, marker::PhantomData};
+use std::io;
 
 use crate::client::composer::EditorWidget;
 use crate::{
@@ -15,7 +15,7 @@ use crate::Client;
 
 pub struct App<C, L> {
     client: Client<C>,
-    lang_loader: L,
+    _lang_loader: L,
     editor: Editor,
 }
 
@@ -24,7 +24,7 @@ impl<C: Canvas, L: LanguageLoader> App<C, L> {
         Self {
             client,
             editor: Editor::init(),
-            lang_loader,
+            _lang_loader: lang_loader,
         }
     }
 
@@ -61,8 +61,6 @@ impl<C: Canvas, L: LanguageLoader> App<C, L> {
         }
 
         log::info!("Opened {opened} documents from args");
-
-        let _ = self.lang_loader.load_parser("rust")?;
 
         // nothing opened (except logs) - create first scratch buffer
         if opened == 0 {
