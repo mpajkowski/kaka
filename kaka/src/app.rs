@@ -1,4 +1,4 @@
-use std::{env::Args, io, marker::PhantomData};
+use std::io;
 
 use crate::client::composer::EditorWidget;
 use crate::{
@@ -8,26 +8,34 @@ use crate::{
 use crossterm::event::Event;
 use futures_util::{Stream, StreamExt};
 use kaka_core::{document::Document, ropey::Rope};
+use kaka_treesitter::LanguageLoader;
 use tokio::sync::mpsc;
 
 use crate::Client;
 
-pub struct App<C, E> {
+pub struct App<C, L> {
     client: Client<C>,
+    _lang_loader: L,
     editor: Editor,
-    e: PhantomData<E>,
 }
 
-impl<C: Canvas, E: Stream<Item = Result<Event, io::Error>> + Unpin> App<C, E> {
-    pub fn new(client: Client<C>) -> Self {
+impl<C: Canvas, L: LanguageLoader> App<C, L> {
+    pub fn new(client: Client<C>, lang_loader: L) -> Self {
         Self {
             client,
             editor: Editor::init(),
-            e: PhantomData,
+            _lang_loader: lang_loader,
         }
     }
 
-    pub async fn run(&mut self, args: Args, term_events: &mut E) -> anyhow::Result<()> {
+    pub async fn run<
+        E: Stream<Item = Result<Event, io::Error>> + Unpin,
+        I: Iterator<Item = String>,
+    >(
+        &mut self,
+        args: I,
+        term_events: &mut E,
+    ) -> anyhow::Result<()> {
         // init logging
         let log_document = Document::new_scratch();
         let buffer = Buffer::new_logging(&log_document);

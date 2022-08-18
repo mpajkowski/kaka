@@ -8,6 +8,8 @@ crossterm = { version = "0.25.0", features = ["futures-core", "event-stream"] }
 thiserror = "1.0.31"
 
 kaka-core = { path = "../kaka-core" }
+kaka-treesitter = { path = "../kaka-treesitter" }
+
 futures-util = "0.3.21"
 tokio = { version = "1.20.1", features = ["rt-multi-thread", "io-std", "net", "macros", "sync"] }
 anyhow = "1.0.59"
