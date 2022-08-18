@@ -52,15 +52,20 @@ impl<C: Canvas, L: LanguageLoader> App<C, L> {
 
         // open paths from argv
         let mut opened = 0;
+        let mut failed = 0;
         for arg in args.skip(1) {
             if let Err(e) = self.editor.open(&*arg, opened == 0) {
                 log::error!("{e}");
+                failed += 1;
             } else {
                 opened += 1;
             }
         }
 
         log::info!("Opened {opened} documents from args");
+        if failed > 0 {
+            log::info!("Failed to open {failed} documents");
+        }
 
         // nothing opened (except logs) - create first scratch buffer
         if opened == 0 {
