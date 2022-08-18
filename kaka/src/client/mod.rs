@@ -16,6 +16,9 @@ use self::composer::{Composer, Context};
 
 pub use self::canvas::Canvas;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Redraw(pub bool);
+
 pub struct Client<C> {
     canvas: C,
     composer: Composer,
@@ -34,7 +37,7 @@ impl<C: Canvas> Client<C> {
         self.composer.render(&mut self.canvas, &mut ctx)
     }
 
-    pub fn handle_event(&mut self, event: Event, editor: &mut Editor) -> bool {
+    pub fn handle_event(&mut self, event: Event, editor: &mut Editor) -> Redraw {
         if matches!(event, Event::Resize(_, _)) {
             let _ = self.canvas.clear();
         }

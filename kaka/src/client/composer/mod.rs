@@ -14,7 +14,7 @@ use crate::{current, editor::Editor};
 
 pub use self::widget::Widget;
 
-use super::{canvas::Canvas, surface::Surface};
+use super::{canvas::Canvas, surface::Surface, Redraw};
 
 pub type Callback = Box<dyn FnOnce(&mut Composer)>;
 
@@ -97,7 +97,7 @@ impl Composer {
         Ok(())
     }
 
-    pub fn handle_event(&mut self, event: Event, ctx: &mut Context) -> bool {
+    pub fn handle_event(&mut self, event: Event, ctx: &mut Context) -> Redraw {
         let resized = if let Event::Resize(x, y) = event {
             self.surfaces.resize(Rect::new(0, 0, x, y));
             true
@@ -132,7 +132,7 @@ impl Composer {
 
         self.cursor = Point::new(cursor_x as u16, cursor_y as u16);
 
-        consumed || resized
+        Redraw(consumed || resized)
     }
 
     pub fn push_widget<W: Widget + 'static>(&mut self, widget: W) {

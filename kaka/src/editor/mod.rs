@@ -14,6 +14,8 @@ use kaka_core::ropey::Rope;
 pub use keymap::{Keymap, KeymapTreeElement};
 pub use mode::Mode;
 
+use crate::client::Redraw;
+
 pub use self::command::{insert_mode_on_key, Command, CommandData};
 pub use self::keymap::Keymaps;
 
@@ -93,7 +95,7 @@ impl Editor {
         self.logger = id;
     }
 
-    pub fn on_log(&mut self, log: Rope) -> bool {
+    pub fn on_log(&mut self, log: Rope) -> Redraw {
         if let Some(log_doc) = self
             .buffers
             .get(&self.logger)
@@ -102,6 +104,6 @@ impl Editor {
             log_doc.text_mut().append(log);
         }
 
-        self.current == self.logger
+        Redraw(self.current == self.logger)
     }
 }

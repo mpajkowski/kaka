@@ -1,6 +1,7 @@
 use std::io;
 
 use crate::client::composer::EditorWidget;
+use crate::client::Redraw;
 use crate::{
     editor::{Buffer, Editor},
     logger, Canvas,
@@ -92,8 +93,10 @@ impl<C: Canvas, L: LanguageLoader> App<C, L> {
 
             let exit = self.editor.should_exit();
 
-            if should_redraw && !exit {
-                self.render()?;
+            if let Redraw(true) = should_redraw {
+                if !exit {
+                    self.render()?;
+                }
             }
 
             if exit {
@@ -104,11 +107,11 @@ impl<C: Canvas, L: LanguageLoader> App<C, L> {
         Ok(())
     }
 
-    fn on_term_event(&mut self, event: Event) -> bool {
+    fn on_term_event(&mut self, event: Event) -> Redraw {
         self.client.handle_event(event, &mut self.editor)
     }
 
-    fn on_log(&mut self, log: Rope) -> bool {
+    fn on_log(&mut self, log: Rope) -> Redraw {
         self.editor.on_log(log)
     }
 
