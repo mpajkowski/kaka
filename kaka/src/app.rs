@@ -54,6 +54,7 @@ impl<C: Canvas, L: LanguageLoader> App<C, L> {
         // open paths from argv
         let mut opened = 0;
         let mut failed = 0;
+
         for arg in args.skip(1) {
             if let Err(e) = self.editor.open(&*arg, opened == 0) {
                 log::error!("{e}");
@@ -70,7 +71,7 @@ impl<C: Canvas, L: LanguageLoader> App<C, L> {
 
         // nothing opened (except logs) - create first scratch buffer
         if opened == 0 {
-            self.editor.open_scratch(true)?;
+            self.editor.open_scratch(true);
         }
 
         // push widgets

@@ -29,7 +29,7 @@ fn coverage(open: bool) -> Result<()> {
     create_dir_all("coverage")?;
 
     println!("=== running coverage ===");
-    cmd!("cargo", "test")
+    cmd!("cargo", "test", "--all")
         .env("CARGO_INCREMENTAL", "0")
         .env("RUSTFLAGS", "-Cinstrument-coverage")
         .env("LLVM_PROFILE_FILE", "cargo-test-%p-%m.profraw")

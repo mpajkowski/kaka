@@ -42,53 +42,56 @@ impl Keymap {
     /// some input paths used for tests
     pub fn xd() -> Self {
         let mappings = [
-            ("q", close as CommandFn),
-            ("x", print_a),
-            ("i", switch_to_insert_mode_before),
-            ("a", switch_to_insert_mode_after),
-            ("gac", print_a),
-            ("gz", print_a),
-            ("<C-a>x", print_a),
-            ("<C-a><C-b>d", print_a),
+            ("q", command!(close)),
+            ("x", command!(print_a)),
+            ("i", command!(switch_to_insert_mode_before)),
+            ("a", command!(switch_to_insert_mode_after)),
+            ("gac", command!(print_a)),
+            ("gz", command!(print_a)),
+            ("<C-a>x", command!(print_a)),
+            ("<C-a><C-b>d", command!(print_a)),
         ];
 
-        Self::with_mappings(mappings).expect("covered in unit tests :)")
+        Self::with_mappings(mappings)
     }
 
     pub fn insert_mode() -> Self {
-        Self::with_mappings([("<ESC>", switch_to_normal_mode as CommandFn)]).unwrap()
+        Self::with_mappings([("<ESC>", command!(switch_to_normal_mode))])
     }
 
     pub fn normal_mode() -> Self {
         let mappings = [
             // mode
-            ("i", switch_to_insert_mode_before as CommandFn),
-            ("a", switch_to_insert_mode_after),
+            ("i", command!(switch_to_insert_mode_before)),
+            ("a", command!(switch_to_insert_mode_after)),
             // movement
-            ("h", move_left),
-            ("j", move_down),
-            ("k", move_up),
-            ("l", move_right),
-            ("gg", goto_line_default_top),
-            ("G", goto_line_default_bottom),
-            ("<Space>xd", switch_to_xd_mode),
-            ("zs", save), // tmp
-            ("ZZ", close),
-            ("x", remove_char),
-            (":", command_mode),
+            ("h", command!(move_left)),
+            ("j", command!(move_down)),
+            ("k", command!(move_up)),
+            ("l", command!(move_right)),
+            ("gg", command!(goto_line_default_top)),
+            ("dd", command!(delete_line)),
+            ("G", command!(goto_line_default_bottom)),
+            ("u", command!(undo)),
+            ("<C-r>", command!(redo)),
+            ("<Space>xd", command!(switch_to_xd_mode)),
+            ("zs", command!(save)), // tmp
+            ("ZZ", command!(close)),
+            ("x", command!(remove_char)),
+            (":", command!(command_mode)),
             // buffer
-            ("<TAB>", buffer_next),
-            ("<S-TAB>", buffer_prev),
-            ("<C-b>c", buffer_create),
-            ("<C-b>k", buffer_kill),
+            ("<TAB>", command!(buffer_next)),
+            ("<S-TAB>", command!(buffer_prev)),
+            ("<C-b>c", command!(buffer_create)),
+            ("<C-b>k", command!(buffer_kill)),
         ];
 
-        Self::with_mappings(mappings).unwrap()
+        Self::with_mappings(mappings)
     }
 
     pub fn with_mappings(
-        mappings: impl IntoIterator<Item = (&'static str, CommandFn)>,
-    ) -> Result<Self> {
+        mappings: impl IntoIterator<Item = (&'static str, Command)>,
+    ) -> Self {
         let mut keymap = Self::default();
 
         let mut mappings = mappings
@@ -111,7 +114,7 @@ impl Keymap {
                 if len > 1 {
                     e.insert(KeymapTreeElement::Node(Self::default()));
                 } else {
-                    e.insert(KeymapTreeElement::Leaf(command!(command)));
+                    e.insert(KeymapTreeElement::Leaf(command));
                     continue;
                 }
             }
@@ -130,7 +133,7 @@ impl Keymap {
                     if idx < len - 1 {
                         e.insert(KeymapTreeElement::Node(Self::default()));
                     } else {
-                        e.insert(KeymapTreeElement::Leaf(command!(command)));
+                        e.insert(KeymapTreeElement::Leaf(command));
                         break;
                     }
                 }
@@ -146,7 +149,7 @@ impl Keymap {
             }
         }
 
-        Ok(keymap)
+        keymap
     }
 }
 

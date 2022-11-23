@@ -14,7 +14,7 @@ pub struct PromptWidget {
 }
 
 impl PromptWidget {
-    pub fn new(char: char) -> Self {
+    pub const fn new(char: char) -> Self {
         Self {
             char,
             line: String::new(),
@@ -32,7 +32,7 @@ impl Widget for PromptWidget {
             format!("{}{}", self.char, self.line),
             width as usize,
             Style::default().fg(Color::Red),
-        )
+        );
     }
 
     fn handle_event(&mut self, event: &Event, _ctx: &mut Context) -> super::EventOutcome {

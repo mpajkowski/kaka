@@ -17,7 +17,7 @@ impl Log for BufferLogger {
 
     fn log(&self, record: &log::Record) {
         let line = format!("{} - {}\n", record.level(), record.args());
-        let _ = self.tx.send(Rope::from_str(&line));
+        self.tx.send(Rope::from_str(&line)).ok();
     }
 
     fn flush(&self) {}
@@ -28,5 +28,5 @@ pub fn enable(tx: UnboundedSender<Rope>) {
 
     set_logger(logger)
         .map(|_| log::set_max_level(log::LevelFilter::Trace))
-        .unwrap();
+        .ok();
 }

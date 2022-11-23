@@ -98,8 +98,7 @@ fn to_known_special_keyevent(string: &str) -> Option<KeyEvent> {
     let mut modifiers = KeyModifiers::empty();
     let code = match &*string.to_uppercase() {
         "ESC" => KeyCode::Esc,
-        "BS" => KeyCode::Backspace,
-        "DEL" => KeyCode::Backspace,
+        "BS" | "DEL" => KeyCode::Backspace,
         "CR" => KeyCode::Enter,
         "TAB" => KeyCode::Tab,
         "S-TAB" => {

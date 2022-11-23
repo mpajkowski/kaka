@@ -8,7 +8,7 @@
 mod app;
 mod client;
 mod editor;
-pub mod logger;
+mod logger;
 mod macros;
 
 use std::io::stdout;
@@ -18,16 +18,17 @@ use client::Client;
 use crossterm::event::EventStream;
 
 pub use client::Canvas;
-use kaka_core::languages::Languages;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    if matches!(std::env::var("USE_ENVLOGGER").as_deref(), Ok("1" | "true")) {
+        env_logger::init();
+    }
+
     let crossterm_canvas = client::CrosstermCanvas::new(stdout(), true)?;
     let client = Client::new(crossterm_canvas);
 
-    let lang_loader = Languages::from_yaml("usr.share.kaka/languages.yaml")?;
-
-    let mut app = App::new(client, lang_loader);
+    let mut app = App::new(client, ());
     app.run(std::env::args(), &mut EventStream::new()).await?;
 
     Ok(())

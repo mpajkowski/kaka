@@ -6,7 +6,7 @@ use unicode_width::UnicodeWidthStr;
 
 use super::style::{Color, Modifier, Style};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Cell {
     pub symbol: String,
     pub fg: Color,
@@ -16,6 +16,7 @@ pub struct Cell {
 
 impl Cell {
     pub fn set_symbol(&mut self, sym: &str) -> &mut Self {
+
         self.symbol.clear();
         self.symbol.push_str(sym);
         self

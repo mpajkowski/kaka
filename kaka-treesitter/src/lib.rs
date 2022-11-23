@@ -11,6 +11,12 @@ pub trait LanguageLoader {
     fn load_parser(&self, lang: &str) -> Result<Option<Parser>>;
 }
 
+impl LanguageLoader for () {
+    fn load_parser(&self, _: &str) -> Result<Option<Parser>> {
+        Ok(None)
+    }
+}
+
 impl LanguageLoader for Languages {
     fn load_parser(&self, lang: &str) -> Result<Option<Parser>> {
         let repo = match self.languages.get(lang) {

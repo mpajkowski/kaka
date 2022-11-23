@@ -52,24 +52,16 @@ impl Editor {
         let document = Document::from_path(path)?;
         let buffer = Buffer::new_text(0, &document)?;
 
-        let buffer_id = buffer.id();
-        self.documents.insert(document.id(), document);
-        self.buffers.insert(buffer_id, buffer);
-
-        if set_current {
-            self.current = buffer_id;
-        }
+        self.add_buffer_and_document(buffer, document, set_current);
 
         Ok(())
     }
 
-    pub fn open_scratch(&mut self, set_current: bool) -> anyhow::Result<()> {
+    pub fn open_scratch(&mut self, set_current: bool) {
         let document = Document::new_scratch();
-        let buffer = Buffer::new_text(0, &document)?;
+        let buffer = Buffer::new_text(0, &document).expect("Should not fail");
 
         self.add_buffer_and_document(buffer, document, set_current);
-
-        Ok(())
     }
 
     pub fn add_buffer_and_document(

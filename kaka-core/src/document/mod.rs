@@ -12,7 +12,7 @@ use std::{
 
 use ropey::Rope;
 
-use crate::transaction::Transaction;
+use crate::{history::History, transaction::Transaction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct DocumentId(NonZeroUsize);
@@ -32,8 +32,9 @@ impl DocumentId {
 pub struct Document {
     id: DocumentId,
     text: Rope,
-    transaction: Option<Transaction>,
+    tx_context: Option<TransactionContext>,
     fs_metadata: Option<FilesystemMetadata>,
+    history: History,
 }
 
 impl Document {
@@ -42,8 +43,9 @@ impl Document {
         Self {
             id: DocumentId::next(),
             text: Rope::new(),
+            tx_context: None,
             fs_metadata: None,
-            transaction: None,
+            history: History::default(),
         }
     }
 
@@ -59,39 +61,32 @@ impl Document {
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self, Error> {
         let path = path.as_ref();
 
+        let mut doc = Self::new_scratch();
+
+        let mut doc_metadata = FilesystemMetadata {
+            path: path.to_owned(),
+            writable: true, // TODO check parent metadata?
+        };
+
         if !path.exists() {
-            return Ok(Self {
-                id: DocumentId::next(),
-                text: Rope::new(),
-                transaction: None,
-                fs_metadata: Some(FilesystemMetadata {
-                    path: path.to_owned(),
-                    writable: true, // TODO check parent metadata?
-                }),
-            });
+            doc.fs_metadata = Some(doc_metadata);
+            return Ok(doc);
         }
 
         let metadata = path.metadata()?;
-
         if !metadata.is_file() {
             return Err(Error::NotAFile(path.into()));
         }
 
-        let writable = !metadata.permissions().readonly();
+        doc_metadata.writable = !metadata.permissions().readonly();
 
         let file = File::open(path)?;
-
         let text = Rope::from_reader(BufReader::new(file))?;
 
-        Ok(Self {
-            id: DocumentId::next(),
-            text,
-            fs_metadata: Some(FilesystemMetadata {
-                path: path.into(),
-                writable,
-            }),
-            transaction: None,
-        })
+        doc.text = text;
+        doc.fs_metadata = Some(doc_metadata);
+
+        Ok(doc)
     }
 
     pub const fn is_scratch(&self) -> bool {
@@ -114,25 +109,6 @@ impl Document {
         self.id
     }
 
-    pub fn transaction_mut(&mut self) -> Option<&mut Transaction> {
-        self.transaction.as_mut()
-    }
-
-    pub const fn transaction(&self) -> Option<&Transaction> {
-        self.transaction.as_ref()
-    }
-
-    pub fn begin_tx(&mut self, pos: usize) {
-        self.transaction = Some(Transaction::begin(&self.text, pos));
-    }
-
-    pub fn commit_tx(&mut self) {
-        let tx = self.transaction.take();
-        if let Some(tx) = tx {
-            tx.commit(&mut self.text);
-        }
-    }
-
     pub fn save(&self) -> Result<(), std::io::Error> {
         if let Some(metadata) = self.fs_metadata.as_ref() {
             if metadata.writable {
@@ -142,10 +118,103 @@ impl Document {
 
         Ok(())
     }
+
+    #[track_caller]
+    pub fn with_transaction<F, T>(
+        &mut self,
+        attach: TransactionAttachPolicy,
+        pos: usize,
+        mut action: F,
+    ) where
+        F: FnMut(&mut Self, &mut Transaction) -> TransactionAction,
+    {
+        // validate attach policy requirements
+        match attach {
+            TransactionAttachPolicy::RequireTransactionAlive => {
+                assert!(self.tx_context.is_some())
+            }
+            TransactionAttachPolicy::Disallow => assert!(self.tx_context.is_none()),
+            TransactionAttachPolicy::Allow => {}
+        };
+
+        // restore or create transaction context
+        let tx_context = self.tx_context.take().unwrap_or_else(|| {
+            let mut tx = Transaction::new(&self.text);
+            tx.move_forward_by(pos);
+
+            TransactionContext {
+                transaction: tx,
+                saved_text: self.text.clone(),
+                start_pos: pos,
+            }
+        });
+
+        let TransactionContext {
+            mut transaction,
+            saved_text,
+            start_pos,
+        } = tx_context;
+
+        match action(self, &mut transaction) {
+            TransactionAction::Commit => {
+                self.history.create_commit(&saved_text, transaction);
+            }
+            TransactionAction::Keep => {
+                self.tx_context = Some(TransactionContext {
+                    transaction,
+                    saved_text,
+                    start_pos,
+                })
+            }
+            TransactionAction::Rollback => {}
+        }
+    }
+
+    pub fn undo(&mut self) -> Option<usize> {
+        let Some(tx) = self.history.undo() else { return None };
+        let pos = tx.apply(&mut self.text);
+
+        Some(pos)
+    }
+
+    pub fn redo(&mut self) -> Option<usize> {
+        let Some(tx) = self.history.redo() else { return None };
+        let pos = tx.apply(&mut self.text);
+
+        Some(pos)
+    }
 }
 
 #[derive(Debug)]
 pub struct FilesystemMetadata {
     path: PathBuf,
     writable: bool,
+}
+
+#[derive(Debug)]
+pub enum TransactionAttachPolicy {
+    /// Require alive transaction on attach. Suitable for actions
+    /// that don't finish on one command dispatch cycle
+    RequireTransactionAlive,
+
+    /// Allow subscribing to alive transaction. Suitable for actions
+    /// like LSP textEdit
+    Allow,
+
+    /// Disallow subscribing to alive transaction
+    Disallow,
+}
+
+#[derive(Debug)]
+pub enum TransactionAction {
+    Keep,
+    Commit,
+    Rollback,
+}
+
+#[derive(Debug)]
+struct TransactionContext {
+    transaction: Transaction,
+    saved_text: Rope,
+    start_pos: usize,
 }

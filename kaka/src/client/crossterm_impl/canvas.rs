@@ -62,6 +62,7 @@ impl<T: Write> CrosstermCanvas<T> {
     }
 }
 
+
 impl<T: Write> Canvas for CrosstermCanvas<T> {
     fn clear(&mut self) -> Result<()> {
         execute!(self.writer, Clear(ClearType::All))?;

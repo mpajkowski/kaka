@@ -9,6 +9,7 @@ pub use editor::EditorWidget;
 pub use prompt::PromptWidget;
 
 use kaka_core::shapes::{Point, Rect};
+use unicode_width::UnicodeWidthChar;
 
 use crate::{current, editor::Editor};
 
@@ -127,8 +128,16 @@ impl Composer {
         let text = doc.text();
 
         let pos = buf.text_position;
-        let cursor_y = text.char_to_line(pos) % surface.area.height() as usize;
-        let cursor_x = (pos - text.line_to_char(cursor_y)) % surface.area.width() as usize;
+        let line_idx = text.char_to_line(pos);
+        let start_x = text.line_to_char(line_idx);
+        let chars = pos - start_x;
+        let mut x = 0;
+        for i in 0..chars {
+            x += text.char(start_x + i).width().unwrap_or(1);
+        }
+
+        let cursor_x = x.min(surface.area.width() as usize);
+        let cursor_y = line_idx.min(surface.area.height() as usize);
 
         self.cursor = Point::new(cursor_x as u16, cursor_y as u16);
 

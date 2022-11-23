@@ -1,7 +1,10 @@
 use std::{borrow::Cow, fmt::Debug};
 
 use crossterm::event::{KeyCode, KeyEvent};
-use kaka_core::document::Document;
+use kaka_core::{
+    document::{Document, TransactionAction, TransactionAttachPolicy},
+    graphemes::{nth_next_grapheme_boundary, nth_prev_grapheme_boundary},
+};
 
 use crate::{
     client::composer::{Callback, PromptWidget, Widget},
@@ -24,7 +27,7 @@ impl<'a> CommandData<'a> {
     fn push_widget<W: Widget + 'static>(&mut self, widget: W) {
         self.callback = Some(Box::new(move |composer| {
             composer.push_widget(widget);
-        }))
+        }));
     }
 }
 
@@ -44,6 +47,10 @@ impl Command {
 
     pub fn call(&self, context: &mut CommandData) {
         (self.fun)(context);
+    }
+
+    pub fn describe(&self) -> &str {
+        &self.name
     }
 }
 
@@ -70,16 +77,30 @@ pub fn save(ctx: &mut CommandData) {
 }
 
 pub fn switch_to_insert_mode_before(ctx: &mut CommandData) {
-    let (buf, _) = current_mut!(ctx.editor);
-
-    buf.switch_mode("insert");
+    switch_to_insert_mode_impl(ctx, false);
 }
 
 pub fn switch_to_insert_mode_after(ctx: &mut CommandData) {
+    switch_to_insert_mode_impl(ctx, true);
+}
+
+fn switch_to_insert_mode_impl(ctx: &mut CommandData, after: bool) {
     let (buf, doc) = current_mut!(ctx.editor);
 
     buf.switch_mode("insert");
-    buf.text_position = (buf.text_position + 1).min(doc.text().len_chars());
+
+    doc.with_transaction(
+        TransactionAttachPolicy::Disallow,
+        buf.text_position,
+        |doc, tx| {
+            if after && buf.text_position < doc.text().len_chars() {
+                buf.text_position += 1;
+                tx.move_forward_by_one();
+            }
+
+            TransactionAction::Keep
+        },
+    );
 }
 
 pub fn switch_to_xd_mode(ctx: &mut CommandData) {
@@ -94,7 +115,7 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
     let was_insert = buf.mode().is_insert();
     buf.switch_mode("normal");
 
-    // move one cell left when exiting insert mode
+    // move one cell left when exiting insert mode and commit transaction
     if was_insert {
         let text = doc.text();
         let line_idx = text.char_to_line(buf.text_position);
@@ -102,6 +123,12 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
 
         buf.text_position = buf.text_position.saturating_sub(1).max(line_start);
         buf.update_saved_column(doc);
+
+        doc.with_transaction(
+            TransactionAttachPolicy::RequireTransactionAlive,
+            buf.text_position,
+            |_, _| TransactionAction::Commit,
+        )
     }
 }
 
@@ -111,34 +138,34 @@ pub fn move_left(ctx: &mut CommandData) {
 
     let pos = buf.text_position;
     let text = doc.text();
-    let line_idx = text.char_to_line(pos);
+    let curr_line = text.char_to_line(pos);
+    let line_start = text.line_to_char(curr_line);
+    let line = text.line(curr_line);
 
-    let line_start_idx = text.line_to_char(line_idx);
-    let current_x = pos - line_start_idx;
-
-    if current_x > 0 {
-        buf.text_position = buf.text_position.saturating_sub(count);
-        buf.saved_column = current_x.saturating_sub(count);
-    }
+    let new_pos = line_start + nth_prev_grapheme_boundary(line, pos - line_start, count);
+    buf.text_position = new_pos;
+    buf.update_saved_column(doc);
 }
 
 pub fn move_right(ctx: &mut CommandData) {
     let count = ctx.count.unwrap_or(1);
     let (buf, doc) = current_mut!(ctx.editor);
 
+    let pos = buf.text_position;
     let text = doc.text();
-    let current_line_idx = text.char_to_line(buf.text_position);
-    let current_line_start = text.line_to_char(current_line_idx);
-    let next_line_start = text.line_to_char(current_line_idx + 1);
+    let curr_line = text.char_to_line(pos);
+    let line_start = text.line_to_char(curr_line);
+    let line = text.line(curr_line);
 
-    let mut new_pos = (buf.text_position + count)
-        .min(next_line_start)
-        .min(text.len_chars().saturating_sub(1));
+    let mut new_pos = line_start
+        + nth_next_grapheme_boundary(line, pos - line_start, count).min(line.len_chars() - 1);
 
-    new_pos = new_pos.saturating_sub((text.chars_at(new_pos).next() == Some('\n')) as usize);
+    if text.get_char(new_pos) == Some('\n') {
+        new_pos -= 1;
+    }
 
     buf.text_position = new_pos;
-    buf.saved_column = new_pos.saturating_sub(current_line_start);
+    buf.update_saved_column(doc);
 }
 
 pub fn move_up(ctx: &mut CommandData) {
@@ -188,8 +215,8 @@ impl GotoLine {
         let limit = text.len_lines().saturating_sub(1);
 
         match self {
-            GotoLine::Fixed(line) => line.min(limit),
-            GotoLine::Offset(offset) => {
+            Self::Fixed(line) => line.min(limit),
+            Self::Offset(offset) => {
                 let pos = buf.text_position;
                 let curr_line_start = text.char_to_line(pos);
 
@@ -217,24 +244,48 @@ fn goto_line_impl(buf: &mut Buffer, doc: &Document, goto_line: GotoLine) {
     buf.text_position = new_pos;
 }
 
-pub fn remove_char(ctx: &mut CommandData) {
+pub fn delete_line(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
     let text = doc.text_mut();
+    let pos = buf.text_position;
 
-    let current_line_idx = text.char_to_line(buf.text_position);
-    let current_line_start = text.line_to_char(current_line_idx);
-    let current_line_end = text.line_to_char(current_line_idx + 1);
+    let line_idx = text.char_to_line(pos);
+    let line_start = text.line_to_char(line_idx);
+    let line_end = text.line_to_char(line_idx + 1);
 
-    if (current_line_start..current_line_end).contains(&buf.text_position) {
-        let pos = buf.text_position;
+    text.remove(line_start..line_end);
+}
 
-        let _ = text.try_remove(pos..pos + 1);
+pub fn remove_char(ctx: &mut CommandData) {
+    let (buf, doc) = current_mut!(ctx.editor);
 
-        if pos == current_line_end.saturating_sub(2) {
-            buf.text_position = (pos.saturating_sub(1)).max(current_line_start);
-        }
-    }
+    doc.with_transaction(
+        TransactionAttachPolicy::Disallow,
+        buf.text_position,
+        |doc, tx| {
+            let text = doc.text_mut();
+
+            let current_line_idx = text.char_to_line(buf.text_position);
+            let current_line_start = text.line_to_char(current_line_idx);
+            let current_line_end = text.line_to_char(current_line_idx + 1);
+
+            if (current_line_start..current_line_end).contains(&buf.text_position) {
+                let pos = buf.text_position;
+
+                if text.try_remove(pos..=pos).is_ok() {
+                    if pos == current_line_end.saturating_sub(2) {
+                        buf.text_position = (pos.saturating_sub(1)).max(current_line_start);
+                    }
+
+                    tx.delete_one();
+                    return TransactionAction::Commit;
+                }
+            }
+
+            TransactionAction::Rollback
+        },
+    )
 }
 
 pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
@@ -242,28 +293,54 @@ pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
 
     debug_assert!(matches!(buf.mode(), Mode::Insert));
 
-    let text = doc.text_mut();
+    doc.with_transaction(
+        TransactionAttachPolicy::RequireTransactionAlive,
+        buf.text_position,
+        |doc, tx| {
+            let text = doc.text_mut();
 
-    let pos = buf.text_position;
+            let pos = buf.text_position;
 
-    match event.code {
-        KeyCode::Char(c) => {
-            text.insert_char(pos, c);
-            buf.text_position += 1;
-        }
-        KeyCode::Backspace => {
-            let new_pos = pos.saturating_sub(1);
-            text.remove(new_pos..pos);
-            buf.text_position = new_pos;
-        }
-        KeyCode::Enter => {
-            text.insert_char(pos, '\n');
-            buf.text_position += 1;
-        }
-        KeyCode::Left => buf.text_position = buf.text_position.saturating_sub(1),
-        KeyCode::Right => buf.text_position = (buf.text_position + 1).min(text.len_chars() - 1),
-        _ => { /* TODO */ }
-    };
+            match event.code {
+                KeyCode::Char(c) => {
+                    text.insert_char(pos, c);
+                    buf.text_position += 1;
+
+                    tx.insert_char(c)
+                }
+                KeyCode::Backspace => {
+                    if pos > 0 {
+                        let new_pos = pos - 1;
+                        text.remove(new_pos..pos);
+                        buf.text_position = new_pos;
+
+                        tx.delete_one();
+                        tx.move_backward_by(1);
+                    }
+                }
+                KeyCode::Enter => {
+                    text.insert_char(pos, '\n');
+                    buf.text_position += 1;
+                    tx.insert_char('\n');
+                }
+                KeyCode::Left => {
+                    if pos > 0 {
+                        buf.text_position -= 1;
+                        tx.move_backward_by(1)
+                    }
+                }
+                KeyCode::Right => {
+                    if pos < text.len_chars() - 1 {
+                        buf.text_position += 1;
+                        tx.move_forward_by(1);
+                    }
+                }
+                _ => { /* TODO */ }
+            }
+
+            TransactionAction::Keep
+        },
+    );
 }
 
 pub fn buffer_next(ctx: &mut CommandData) {
@@ -325,6 +402,22 @@ pub fn buffer_kill(ctx: &mut CommandData) {
     }
 }
 
+pub fn undo(ctx: &mut CommandData) {
+    let (buf, doc) = current_mut!(ctx.editor);
+
+    if let Some(pos) = doc.undo() {
+        buf.text_position = pos;
+    }
+}
+
+pub fn redo(ctx: &mut CommandData) {
+    let (buf, doc) = current_mut!(ctx.editor);
+
+    if let Some(pos) = doc.redo() {
+        buf.text_position = pos;
+    }
+}
+
 pub fn command_mode(ctx: &mut CommandData) {
     ctx.push_widget(PromptWidget::new(':'));
 }
@@ -373,7 +466,7 @@ mod test {
 
         let (buf, _) = current!(data.editor);
 
-        for check in checks_buffer.into_iter() {
+        for check in checks_buffer {
             assert!(check(buf), "Buffer assert failed: {buf:#?}");
         }
     }

@@ -33,13 +33,14 @@ impl<C: Canvas> Client<C> {
     }
 
     pub fn render(&mut self, editor: &mut Editor) -> Result<()> {
+
         let mut ctx = Context { editor };
         self.composer.render(&mut self.canvas, &mut ctx)
     }
 
     pub fn handle_event(&mut self, event: Event, editor: &mut Editor) -> Redraw {
         if matches!(event, Event::Resize(_, _)) {
-            let _ = self.canvas.clear();
+            self.canvas.clear().ok();
         }
 
         let mut ctx = Context { editor };

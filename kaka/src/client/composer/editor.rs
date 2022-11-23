@@ -53,7 +53,6 @@ impl EditorWidget {
             Some(c) => self.count = Some(c),
             None => {
                 self.reset();
-                return;
             }
         }
     }
@@ -149,7 +148,7 @@ impl Widget for EditorWidget {
         };
 
         self.update_count(key_event);
-        let command = self.find_command(&ctx.editor.keymaps, buf, key_event.clone());
+        let command = self.find_command(&ctx.editor.keymaps, buf, key_event);
 
         let is_insert = buf.mode().is_insert();
 
@@ -162,9 +161,11 @@ impl Widget for EditorWidget {
 
         // TODO delegate to Mode?
         if let Some(command) = command {
+            log::debug!("Invoking command: {}", command.describe());
             command.call(&mut context);
             self.reset();
         } else if is_insert {
+            log::debug!("insert_mode_on_key");
             insert_mode_on_key(&mut context, key_event);
         }
 

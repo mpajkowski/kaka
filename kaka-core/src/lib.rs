@@ -6,6 +6,8 @@
 )]
 
 pub mod document;
+pub mod graphemes;
+pub mod history;
 pub mod languages;
 pub mod shapes;
 pub mod transaction;

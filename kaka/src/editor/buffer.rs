@@ -12,7 +12,7 @@ use super::Mode;
 pub struct BufferId(NonZeroUsize);
 
 impl BufferId {
-    pub const MAX: BufferId = Self(unsafe { NonZeroUsize::new_unchecked(usize::MAX) });
+    pub const MAX: Self = Self(unsafe { NonZeroUsize::new_unchecked(usize::MAX) });
 
     pub fn next() -> Self {
         pub static IDS: AtomicUsize = AtomicUsize::new(1);
@@ -106,7 +106,7 @@ impl Buffer {
         self.set_mode_impl(mode).ok();
     }
 
-    pub fn immortal(&self) -> bool {
+    pub const fn immortal(&self) -> bool {
         self.immortal
     }
 
