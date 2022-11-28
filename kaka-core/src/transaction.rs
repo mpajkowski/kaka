@@ -1,4 +1,4 @@
-use std::{borrow::Cow, cmp::Ordering};
+use std::{borrow::Cow, num::NonZeroUsize};
 
 use ropey::Rope;
 use smartstring::LazyCompact;
@@ -6,40 +6,159 @@ use smartstring::LazyCompact;
 pub type SmartString = smartstring::SmartString<LazyCompact>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Change {
-    /// Move forward by offset
-    MoveForward { count: usize },
-
-    /// Move backward by offset
-    MoveBackward { count: usize },
-
-    /// Insert string
-    Insert { content: SmartString },
-
-    /// Delete
-    Delete { len: usize },
-}
-
-#[derive(Debug)]
-pub struct Transaction {
-    len_before: usize,
-    len_after: usize,
+pub struct ChangeSet {
+    start_pos: usize,
+    end_pos: usize,
     changes: Vec<Change>,
 }
 
+impl ChangeSet {
+    pub const fn new(pos: usize) -> Self {
+        Self {
+            start_pos: pos,
+            end_pos: pos,
+            changes: vec![],
+        }
+    }
+
+    fn insert(&mut self, string: SmartString) -> usize {
+        use Change::*;
+
+        let strlen = string.chars().count();
+
+        if strlen == 0 {
+            return 0;
+        }
+
+        match self.changes.as_mut_slice() {
+            [.., Insert(content)] => {
+                content.push_str(&string);
+            }
+            _ => self.changes.push(Insert(string)),
+        }
+
+        self.end_pos += strlen;
+        strlen
+    }
+
+    fn move_forward_by(&mut self, count: usize) {
+        use Change::*;
+
+        match self.changes.last_mut() {
+            Some(MoveForward(prev_count)) => *prev_count += count,
+            _ => self.changes.push(MoveForward(count)),
+        }
+
+        self.end_pos += count;
+    }
+
+    fn delete(&mut self, len: usize) {
+        use Change::*;
+
+        if len == 0 {
+            return;
+        }
+
+        match self.changes.last_mut() {
+            Some(Delete(prev_len)) => *prev_len += len,
+            _ => self.changes.push(Delete(len)),
+        };
+    }
+
+    fn apply(&self, offset: isize, rope: &mut Rope) -> usize {
+        let mut pos = (offset + self.start_pos as isize) as usize;
+
+        for change in self.changes.iter() {
+            match change {
+                Change::MoveForward(count) => {
+                    pos += *count;
+                }
+                Change::Insert(content) => {
+                    rope.insert(pos, content);
+                    pos += content.len();
+                }
+                Change::Delete(len) => {
+                    let range = pos..pos + *len;
+                    rope.remove(range);
+                }
+            }
+        }
+
+        pos
+    }
+
+    fn changes_text(&self) -> bool {
+        self.changes
+            .iter()
+            .any(|change| matches!(change, Change::Insert(_) | Change::Delete(_)))
+    }
+
+    #[track_caller]
+    pub fn undo(&self, original: &Rope) -> Self {
+        use Change::*;
+
+        let mut revert = Self {
+            start_pos: self.start_pos,
+            end_pos: self.start_pos, // we will reach there
+            changes: vec![],
+        };
+
+        for change in self.changes.iter() {
+            match change {
+                MoveForward(count) => {
+                    revert.move_forward_by(*count);
+                }
+                Insert(content) => {
+                    let len = content.chars().count();
+
+                    revert.delete(len);
+                }
+                Delete(len) => {
+                    let pos = revert.end_pos;
+                    let text = Cow::from(original.slice(pos..pos + len));
+                    revert.insert(text.into());
+                }
+            };
+        }
+
+        revert
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Change {
+    /// Move forward by offset
+    MoveForward(usize),
+
+    /// Insert string
+    Insert(SmartString),
+
+    /// Delete
+    Delete(usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Transaction {
+    repeat: NonZeroUsize,
+    len_before: usize,
+    len_after: usize,
+    changesets: Vec<ChangeSet>,
+}
+
 impl Transaction {
-    pub fn new(rope: &Rope) -> Self {
+    pub fn new(rope: &Rope, pos: usize) -> Self {
         let len = rope.len_chars();
 
         Self {
-            changes: Vec::default(),
+            repeat: NonZeroUsize::new(1).unwrap(),
+            changesets: vec![ChangeSet::new(pos)],
             len_before: len,
             len_after: len,
         }
     }
 
     pub fn replace(&mut self, ch: char) {
-        self.delete_one();
+        self.delete(1);
         let mut buf = [0; 4];
         let string = ch.encode_utf8(&mut buf);
         self.insert(string);
@@ -61,178 +180,103 @@ impl Transaction {
             return;
         }
 
-        let string_len = string.len();
+        let strlen = self.changeset_head().insert(string);
 
-        match self.changes.as_mut_slice() {
-            [.., Change::Insert { content }] => content.push_str(&string),
-            _ => self.changes.push(Change::Insert { content: string }),
-        }
-
-        self.len_after += string_len;
+        self.len_after += strlen;
         log::trace!("Transaction::insert: len_new={}", self.len_after);
     }
 
     pub fn move_forward_by(&mut self, count: usize) {
-        let fcount = count;
-
-        log::trace!("Transaction::move_forward_by({fcount})");
-
-        if fcount == 0 {
-            return;
-        }
-
-        use Change::*;
-        match self.changes.as_mut_slice() {
-            [.., MoveForward { count: pfcount }] => *pfcount += fcount,
-            [.., MoveBackward { count: bcount }] => match (*bcount).cmp(&fcount) {
-                Ordering::Greater => *bcount -= count,
-                Ordering::Equal => {
-                    self.changes.pop();
-                }
-                Ordering::Less => {
-                    *self.changes.last_mut().unwrap() = MoveForward {
-                        count: fcount - *bcount,
-                    }
-                }
-            },
-            _ => self.changes.push(MoveForward { count: fcount }),
-        }
-    }
-
-    pub fn move_forward_by_one(&mut self) {
-        self.move_forward_by(1);
+        log::trace!("Transaction::move_forward_by({count})");
+        self.changeset_head().move_forward_by(count);
     }
 
     pub fn move_backward_by(&mut self, count: usize) {
-        let bcount = count;
+        log::trace!("Transaction::move_backward_by({count})");
+        let head = self.changeset_head();
 
-        log::trace!("Transaction::move_backward_by({bcount})");
-
-        if bcount == 0 {
-            return;
-        }
-
-        use Change::*;
-        match self.changes.as_mut_slice() {
-            [.., MoveBackward { count: pbcount }] => *pbcount += count,
-            [.., MoveForward { count: fcount }] => match (*fcount).cmp(&bcount) {
-                Ordering::Greater => *fcount -= bcount,
-                Ordering::Equal => {
-                    self.changes.pop();
-                }
-                Ordering::Less => {
-                    *self.changes.last_mut().unwrap() = MoveBackward {
-                        count: bcount - *fcount,
-                    }
-                }
-            },
-            _ => self.changes.push(MoveBackward { count: bcount }),
+        if head.changes.is_empty() {
+            head.start_pos -= count;
+            head.end_pos -= count;
+        } else {
+            let new_start_pos = head.end_pos - count;
+            self.changesets.push(ChangeSet::new(new_start_pos));
         }
     }
 
     pub fn delete(&mut self, len: usize) {
         log::trace!("Transaction::delete({len})");
 
-        if len == 0 {
-            return;
-        }
-
-        match self.changes.as_mut_slice() {
-            [.., Change::Delete { len: prev_len }] => *prev_len += len,
-            _ => self.changes.push(Change::Delete { len }),
-        };
-
-        self.len_after -= len;
-        log::trace!("Transaction::delete: len_new={}", self.len_after);
+        self.changeset_head().delete(len);
     }
 
-    pub fn delete_one(&mut self) {
-        self.delete(1);
+    pub fn set_repeat(&mut self, repeat: usize) {
+        self.repeat = repeat.try_into().expect("repeat must be greater than one");
     }
 
     pub fn apply(&self, rope: &mut Rope) -> usize {
-        log::trace!("Transaction::commit()");
+        self.apply_impl(rope, false)
+    }
+
+    pub fn apply_repeats(&self, rope: &mut Rope) -> usize {
+        self.apply_impl(rope, true)
+    }
+
+    #[track_caller]
+    fn apply_impl(&self, rope: &mut Rope, only_repeats: bool) -> usize {
+        log::trace!("Transaction::apply()");
 
         let mut pos = 0;
+        let mut offset = None;
+        let pos1 = self.changesets[0].start_pos;
 
-        for change in self.changes.iter() {
-            match change {
-                Change::MoveBackward { count } => {
-                    log::trace!("Transaction::commit() move backward count={count}");
-                    pos -= *count;
-                }
-                Change::MoveForward { count } => {
-                    log::trace!("Transaction::commit() move forward count={count}");
-                    pos += *count;
-                }
-                Change::Insert { content } => {
-                    log::trace!(
-                        "Transaction::commit() insert pos={pos} len={}",
-                        content.len()
-                    );
-                    rope.insert(pos, content);
-                    pos += content.len();
-                }
-                Change::Delete { len } => {
-                    log::trace!("Transaction::commit() delete len={len}");
-                    let range = pos..pos + *len;
-                    rope.remove(range);
-                }
+        let repeat = self.repeat.get() - only_repeats as usize;
+
+        for _ in 0..repeat {
+            for change_set in self.changesets.iter() {
+                pos = change_set.apply(offset.unwrap_or(0), rope);
+            }
+
+            if offset.is_none() {
+                offset = Some(pos as isize - pos1 as isize);
             }
         }
 
-        log::info!("Transaction::commit(): exit");
+        log::trace!("Transaction::apply(): exit");
 
         pos
     }
 
+    #[track_caller]
     pub fn undo(&self, original: &Rope) -> Self {
         log::trace!("Transaction::undo()");
 
         debug_assert_eq!(original.len_chars(), self.len_before);
 
-        let mut changes = Self {
+        let mut revert = self
+            .changesets
+            .iter()
+            .map(|c| c.undo(original))
+            .collect::<Vec<_>>();
+
+        revert.reverse();
+
+        Self {
+            repeat: self.repeat,
             len_before: self.len_after,
             len_after: self.len_after,
-            changes: vec![],
-        };
-
-        let mut pos = 0;
-
-        for change in &self.changes {
-            match change {
-                Change::MoveForward { count } => {
-                    pos += count;
-                    changes.move_forward_by(*count);
-                }
-                Change::MoveBackward { count } => {
-                    pos -= count;
-                    changes.move_backward_by(*count);
-                }
-                Change::Insert { content } => {
-                    let len = content.chars().count();
-
-                    changes.delete(len);
-                }
-                Change::Delete { len } => {
-                    let text = Cow::from(original.slice(pos..pos + len));
-                    changes.insert(text);
-                    pos += len;
-                }
-            };
+            changesets: revert,
         }
-
-        changes
     }
 
     pub fn changes_text(&self) -> bool {
-        for change in self.changes.iter() {
-            if matches!(change, Change::Insert { .. } | Change::Delete { .. }) {
-                return true;
-            }
-        }
+        self.changesets.iter().any(|ch| ch.changes_text())
+    }
 
-        false
+    fn changeset_head(&mut self) -> &mut ChangeSet {
+        self.changesets
+            .last_mut()
+            .expect("At least one changeset in transaction is expected")
     }
 }
 
@@ -241,40 +285,9 @@ mod test {
     use super::*;
 
     #[test]
-    fn move_reduction() {
-        let mut tx = Transaction::new(&Rope::default());
-
-        //start
-
-        // .>
-        tx.move_forward_by(1);
-        assert_eq!(tx.changes, vec![Change::MoveForward { count: 1 }]);
-
-        // .>>
-        tx.move_forward_by(1);
-        assert_eq!(tx.changes, vec![Change::MoveForward { count: 2 }]);
-
-        // .
-        tx.move_backward_by(2);
-        assert_eq!(tx.changes, vec![]);
-
-        // .>
-        tx.move_forward_by(1);
-        assert_eq!(tx.changes, vec![Change::MoveForward { count: 1 }]);
-
-        // <.
-        tx.move_backward_by(2);
-        assert_eq!(tx.changes, vec![Change::MoveBackward { count: 1 }]);
-
-        // .>>
-        tx.move_forward_by(3);
-        assert_eq!(tx.changes, vec![Change::MoveForward { count: 2 }]);
-    }
-
-    #[test]
     fn replace() {
         let mut text = Rope::from("hello tx");
-        let mut tx = Transaction::new(&text);
+        let mut tx = Transaction::new(&text, 0);
         tx.replace('a');
         tx.apply(&mut text);
 
@@ -284,13 +297,13 @@ mod test {
     #[test]
     fn delete() {
         let mut text = Rope::from("hello tx");
-        let mut tx = Transaction::new(&text);
+        let mut tx = Transaction::new(&text, 0);
         tx.delete(2);
         tx.apply(&mut text);
 
-        let mut tx = Transaction::new(&text);
-        tx.move_forward_by_one();
-        tx.delete_one();
+        let mut tx = Transaction::new(&text, 0);
+        tx.move_forward_by(1);
+        tx.delete(1);
         tx.apply(&mut text);
 
         assert_eq!(text, "lo tx");
@@ -301,8 +314,8 @@ mod test {
         let original_text = Rope::from("hello tx");
         let mut transformed_text = original_text.clone();
 
-        let mut tx = Transaction::new(&original_text);
-        tx.move_forward_by_one();
+        let mut tx = Transaction::new(&original_text, 0);
+        tx.move_forward_by(1);
         tx.delete(3);
         tx.insert("xxxy");
         tx.apply(&mut transformed_text);
@@ -313,5 +326,33 @@ mod test {
         inverse.apply(&mut transformed_text);
 
         assert_eq!(original_text, transformed_text);
+    }
+
+    #[test]
+    fn repeat() {
+        let test = "test";
+        let repeat = 1000;
+
+        let mut text = Rope::default();
+        let mut tx = Transaction::new(&text, 0);
+
+        tx.insert(test);
+        tx.set_repeat(repeat);
+        let undo = tx.undo(&text);
+
+        tx.apply(&mut text);
+
+        let expected = [test]
+            .iter()
+            .cycle()
+            .take(repeat)
+            .map(|x| x.to_string())
+            .collect::<String>();
+
+        assert_eq!(text, expected);
+
+        undo.apply(&mut text);
+
+        assert_eq!(text, "");
     }
 }

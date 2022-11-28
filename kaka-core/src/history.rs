@@ -72,7 +72,7 @@ impl Commit {
             timestamp,
         };
 
-        log::debug!("Creating commit {commit:?}");
+        log::debug!("Creating commit {commit:#?}");
 
         commit
     }
@@ -92,7 +92,7 @@ mod test {
         for _ in 0..10 {
             history
                 .commits
-                .push(Commit::new(&Rope::new(), Transaction::new(&Rope::new())));
+                .push(Commit::new(&Rope::new(), Transaction::new(&Rope::new(), 0)));
         }
 
         history.head = 10;

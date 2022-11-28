@@ -14,10 +14,9 @@ mod macros;
 use std::io::stdout;
 
 use app::App;
+pub use client::Canvas;
 use client::Client;
 use crossterm::event::EventStream;
-
-pub use client::Canvas;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {

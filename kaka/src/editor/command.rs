@@ -2,7 +2,7 @@ use std::{borrow::Cow, fmt::Debug};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use kaka_core::{
-    document::{Document, TransactionAction, TransactionAttachPolicy},
+    document::{Document, TransactionAttachPolicy, TransactionLeave},
     graphemes::{nth_next_grapheme_boundary, nth_prev_grapheme_boundary},
 };
 
@@ -61,11 +61,6 @@ impl Debug for Command {
 }
 
 // commands impl
-pub fn print_a(ctx: &mut CommandData) {
-    let (_, doc) = current_mut!(ctx.editor);
-    doc.text_mut().append("a".into());
-}
-
 pub fn close(ctx: &mut CommandData) {
     ctx.editor.exit_code = Some(0);
 }
@@ -85,9 +80,11 @@ pub fn switch_to_insert_mode_after(ctx: &mut CommandData) {
 }
 
 fn switch_to_insert_mode_impl(ctx: &mut CommandData, after: bool) {
+    let repeat = ctx.count.unwrap_or(1).max(1);
+
     let (buf, doc) = current_mut!(ctx.editor);
 
-    buf.switch_mode("insert");
+    buf.switch_mode(Mode::Insert);
 
     doc.with_transaction(
         TransactionAttachPolicy::Disallow,
@@ -95,25 +92,21 @@ fn switch_to_insert_mode_impl(ctx: &mut CommandData, after: bool) {
         |doc, tx| {
             if after && buf.text_position < doc.text().len_chars() {
                 buf.text_position += 1;
-                tx.move_forward_by_one();
+                tx.move_forward_by(1);
             }
 
-            TransactionAction::Keep
+            tx.set_repeat(repeat);
+
+            TransactionLeave::Keep
         },
     );
-}
-
-pub fn switch_to_xd_mode(ctx: &mut CommandData) {
-    let (buf, _) = current_mut!(ctx.editor);
-
-    buf.switch_mode("xd");
 }
 
 pub fn switch_to_normal_mode(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
     let was_insert = buf.mode().is_insert();
-    buf.switch_mode("normal");
+    buf.switch_mode(Mode::Normal);
 
     // move one cell left when exiting insert mode and commit transaction
     if was_insert {
@@ -127,8 +120,12 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
         doc.with_transaction(
             TransactionAttachPolicy::RequireTransactionAlive,
             buf.text_position,
-            |_, _| TransactionAction::Commit,
-        )
+            |doc, tx| {
+                tx.apply_repeats(doc.text_mut());
+
+                TransactionLeave::Commit
+            },
+        );
     }
 }
 
@@ -233,7 +230,7 @@ fn goto_line_impl(buf: &mut Buffer, doc: &Document, goto_line: GotoLine) {
     let goto_line_start = text.line_to_char(goto_line_idx);
     let goto_line_end = text.line_to_char(goto_line_idx + 1).saturating_sub(1);
 
-    let mut new_pos = (goto_line_start + buf.saved_column).min(goto_line_end);
+    let mut new_pos = (goto_line_start + buf.saved_column()).min(goto_line_end);
 
     if text.char(new_pos) == '\n' {
         new_pos = new_pos.saturating_sub(1);
@@ -278,14 +275,14 @@ pub fn remove_char(ctx: &mut CommandData) {
                         buf.text_position = (pos.saturating_sub(1)).max(current_line_start);
                     }
 
-                    tx.delete_one();
-                    return TransactionAction::Commit;
+                    tx.delete(1);
+                    return TransactionLeave::Commit;
                 }
             }
 
-            TransactionAction::Rollback
+            TransactionLeave::Rollback
         },
-    )
+    );
 }
 
 pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
@@ -306,16 +303,16 @@ pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
                     text.insert_char(pos, c);
                     buf.text_position += 1;
 
-                    tx.insert_char(c)
+                    tx.insert_char(c);
                 }
                 KeyCode::Backspace => {
                     if pos > 0 {
                         let new_pos = pos - 1;
-                        text.remove(new_pos..pos);
                         buf.text_position = new_pos;
+                        text.remove(new_pos..pos);
 
-                        tx.delete_one();
                         tx.move_backward_by(1);
+                        tx.delete(1);
                     }
                 }
                 KeyCode::Enter => {
@@ -326,7 +323,7 @@ pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
                 KeyCode::Left => {
                     if pos > 0 {
                         buf.text_position -= 1;
-                        tx.move_backward_by(1)
+                        tx.move_backward_by(1);
                     }
                 }
                 KeyCode::Right => {
@@ -338,7 +335,7 @@ pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
                 _ => { /* TODO */ }
             }
 
-            TransactionAction::Keep
+            TransactionLeave::Keep
         },
     );
 }
@@ -477,30 +474,30 @@ mod test {
     #[test]
     #[rustfmt::skip]
     fn move_left_prevented_on_pos_0() {
-        test_cmd(0, "kakaka\n", move_left, [|buf: B| buf.text_position == 0, |buf: B| buf.saved_column == 0]);
+        test_cmd(0, "kakaka\n", move_left, [|buf: B| buf.text_position == 0, |buf: B| buf.saved_column() == 0]);
         test_cmd(7, "kakaka\nkaka", move_left, [|buf: B| buf.text_position == 7]);
     }
 
     #[test]
     #[rustfmt::skip]
     fn move_left_doable_until_newline() {
-        test_cmd(3, "kaka\n", move_left, [|buf: B| buf.text_position == 2, |buf: B| buf.saved_column == 2]);
-        test_cmd(2, "kaka\n", move_left, [|buf: B| buf.text_position == 1, |buf: B| buf.saved_column == 1]);
-        test_cmd(1, "kaka\n", move_left, [|buf: B| buf.text_position == 0, |buf: B| buf.saved_column == 0]);
+        test_cmd(3, "kaka\n", move_left, [|buf: B| buf.text_position == 2, |buf: B| buf.saved_column() == 2]);
+        test_cmd(2, "kaka\n", move_left, [|buf: B| buf.text_position == 1, |buf: B| buf.saved_column() == 1]);
+        test_cmd(1, "kaka\n", move_left, [|buf: B| buf.text_position == 0, |buf: B| buf.saved_column() == 0]);
     }
 
     #[test]
     #[rustfmt::skip]
     fn move_right_doable_until_newline() {
-        test_cmd(0, "kaka\n", move_right, [|buf: B| buf.text_position == 1, |buf: B| buf.saved_column == 1]);
-        test_cmd(1, "kaka\n", move_right, [|buf: B| buf.text_position == 2, |buf: B| buf.saved_column == 2]);
-        test_cmd(2, "kaka\n", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column == 3]);
-        test_cmd(3, "kaka", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column == 3]);
-        test_cmd(3, "kaka\n", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column == 3]);
-        test_cmd(5, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 6, |buf: B| buf.saved_column == 1]);
-        test_cmd(6, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 2]);
-        test_cmd(7, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 8, |buf: B| buf.saved_column == 3]);
-        test_cmd(7, "kaka\nkaka\n", move_right, [|buf: B| buf.text_position == 8, |buf: B| buf.saved_column == 3]);
+        test_cmd(0, "kaka\n", move_right, [|buf: B| buf.text_position == 1, |buf: B| buf.saved_column() == 1]);
+        test_cmd(1, "kaka\n", move_right, [|buf: B| buf.text_position == 2, |buf: B| buf.saved_column() == 2]);
+        test_cmd(2, "kaka\n", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column() == 3]);
+        test_cmd(3, "kaka", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column() == 3]);
+        test_cmd(3, "kaka\n", move_right, [|buf: B| buf.text_position == 3, |buf: B| buf.saved_column() == 3]);
+        test_cmd(5, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 6, |buf: B| buf.saved_column() == 1]);
+        test_cmd(6, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column() == 2]);
+        test_cmd(7, "kaka\nkaka", move_right, [|buf: B| buf.text_position == 8, |buf: B| buf.saved_column() == 3]);
+        test_cmd(7, "kaka\nkaka\n", move_right, [|buf: B| buf.text_position == 8, |buf: B| buf.saved_column() == 3]);
     }
 
     #[test]
@@ -541,14 +538,14 @@ mod test {
     #[rustfmt::skip]
     fn move_down_hops() {
         let text = "0123\n567\n901";
-        test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 3]);
+        test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column() == 3]);
         test_cmd(5, text, move_down, [|buf: B| buf.text_position == 9]);
         test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
         test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
         test_cmd(9, text, move_down, [|buf: B| buf.text_position == 9]);
         test_cmd(10, text, move_down, [|buf: B| buf.text_position == 10]);
         let text = "0123\n567\n901\n\n\n";
-        test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column == 3]);
+        test_cmd(3, text, move_down, [|buf: B| buf.text_position == 7, |buf: B| buf.saved_column() == 3]);
         test_cmd(5, text, move_down, [|buf: B| buf.text_position == 9]);
         test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);
         test_cmd(6, text, move_down, [|buf: B| buf.text_position == 10]);

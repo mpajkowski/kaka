@@ -31,8 +31,8 @@ pub struct Buffer {
     avail_modes: Vec<Mode>,
     current_mode: usize,
     immortal: bool,
+    saved_column: usize,
     pub text_position: usize,
-    pub saved_column: usize,
 }
 
 impl Buffer {
@@ -41,20 +41,20 @@ impl Buffer {
             pos,
             [Mode::Normal, Mode::Xd, Mode::Insert],
             document,
-            &Mode::Normal,
+            Mode::Normal,
             false,
         )
     }
 
     pub fn new_logging(document: &Document) -> Self {
-        Self::new(0, vec![Mode::Normal], document, &Mode::Normal, true).unwrap()
+        Self::new(0, vec![Mode::Normal], document, Mode::Normal, true).unwrap()
     }
 
     pub fn new(
         pos: usize,
         avail_modes: impl IntoIterator<Item = Mode>,
         document: &Document,
-        start_mode: &Mode,
+        start_mode: Mode,
         immortal: bool,
     ) -> Result<Self> {
         let text = document.text();
@@ -74,7 +74,7 @@ impl Buffer {
             immortal,
         };
 
-        this.set_mode_impl(start_mode.name())?;
+        this.set_mode_impl(start_mode)?;
         this.update_saved_column(document);
 
         Ok(this)
@@ -101,7 +101,7 @@ impl Buffer {
         &self.avail_modes[self.current_mode]
     }
 
-    pub fn switch_mode(&mut self, mode: &str) {
+    pub fn switch_mode(&mut self, mode: Mode) {
         // ignore error for now
         self.set_mode_impl(mode).ok();
     }
@@ -110,11 +110,15 @@ impl Buffer {
         self.immortal
     }
 
-    fn set_mode_impl(&mut self, mode: &str) -> Result<()> {
+    pub const fn saved_column(&self) -> usize {
+        self.saved_column
+    }
+
+    fn set_mode_impl(&mut self, mode: Mode) -> Result<()> {
         let mode_pos = self
             .avail_modes
             .iter()
-            .position(|m| m.name() == mode)
+            .position(|m| *m == mode)
             .with_context(|| format!("Buffer is not capable to enter {mode}"))?;
 
         self.current_mode = mode_pos;
@@ -161,10 +165,10 @@ mod test {
         let modes = [Mode::Normal, Mode::Insert];
 
         let document = Document::new_scratch();
-        let mut buffer = Buffer::new(0, modes, &document, &Mode::Normal, false).unwrap();
+        let mut buffer = Buffer::new(0, modes, &document, Mode::Normal, false).unwrap();
         assert!(matches!(buffer.mode(), &Mode::Normal));
 
-        buffer.switch_mode("insert");
+        buffer.switch_mode(Mode::Insert);
         assert!(buffer.mode().is_insert());
     }
 }

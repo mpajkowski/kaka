@@ -15,9 +15,9 @@ fn to_tokens(chars: &str) -> Result<Vec<Token<'_>>> {
     let mut tokens = vec![];
     let mut diamond_start = None;
 
-    let e = |ch, pos| anyhow::bail!("Unexpected char {ch} on pos {pos}");
-
     for (i, ch) in chars.chars().enumerate() {
+        let err = || anyhow::bail!("Unexpected char {ch} on pos {i}");
+
         if ch.is_ascii_whitespace() {
             break;
         }
@@ -26,9 +26,9 @@ fn to_tokens(chars: &str) -> Result<Vec<Token<'_>>> {
 
         match diamond_start {
             None if ch == '<' => diamond_start = Some(i),
-            None if ch == '>' => e(ch, i)?,
+            None if ch == '>' => err()?,
             None => tokens.push(Token::Char(ch)),
-            Some(_) if ch == '<' => e(ch, i)?,
+            Some(_) if ch == '<' => err()?,
             Some(start) if ch == '>' => {
                 tokens.push(Token::Diamond(&chars[start + 1..i]));
                 diamond_start = None;

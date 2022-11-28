@@ -120,18 +120,18 @@ impl Document {
     }
 
     #[track_caller]
-    pub fn with_transaction<F, T>(
+    pub fn with_transaction<F>(
         &mut self,
         attach: TransactionAttachPolicy,
         pos: usize,
-        mut action: F,
+        mut callback: F,
     ) where
-        F: FnMut(&mut Self, &mut Transaction) -> TransactionAction,
+        F: FnMut(&mut Self, &mut Transaction) -> TransactionLeave,
     {
         // validate attach policy requirements
         match attach {
             TransactionAttachPolicy::RequireTransactionAlive => {
-                assert!(self.tx_context.is_some())
+                assert!(self.tx_context.is_some());
             }
             TransactionAttachPolicy::Disallow => assert!(self.tx_context.is_none()),
             TransactionAttachPolicy::Allow => {}
@@ -139,8 +139,7 @@ impl Document {
 
         // restore or create transaction context
         let tx_context = self.tx_context.take().unwrap_or_else(|| {
-            let mut tx = Transaction::new(&self.text);
-            tx.move_forward_by(pos);
+            let tx = Transaction::new(&self.text, pos);
 
             TransactionContext {
                 transaction: tx,
@@ -155,33 +154,29 @@ impl Document {
             start_pos,
         } = tx_context;
 
-        match action(self, &mut transaction) {
-            TransactionAction::Commit => {
+        match callback(self, &mut transaction) {
+            TransactionLeave::Commit => {
                 self.history.create_commit(&saved_text, transaction);
             }
-            TransactionAction::Keep => {
+            TransactionLeave::Keep => {
                 self.tx_context = Some(TransactionContext {
                     transaction,
                     saved_text,
                     start_pos,
-                })
+                });
             }
-            TransactionAction::Rollback => {}
+            TransactionLeave::Rollback => {
+                self.text = saved_text;
+            }
         }
     }
 
     pub fn undo(&mut self) -> Option<usize> {
-        let Some(tx) = self.history.undo() else { return None };
-        let pos = tx.apply(&mut self.text);
-
-        Some(pos)
+        self.history.undo().map(|tx| tx.apply(&mut self.text))
     }
 
     pub fn redo(&mut self) -> Option<usize> {
-        let Some(tx) = self.history.redo() else { return None };
-        let pos = tx.apply(&mut self.text);
-
-        Some(pos)
+        self.history.redo().map(|tx| tx.apply(&mut self.text))
     }
 }
 
@@ -205,10 +200,16 @@ pub enum TransactionAttachPolicy {
     Disallow,
 }
 
+/// Descibes what to do with transaction on scope exit
 #[derive(Debug)]
-pub enum TransactionAction {
+pub enum TransactionLeave {
+    /// Keep current transaction
     Keep,
+
+    /// Commit changes
     Commit,
+
+    /// Rollback changes
     Rollback,
 }
 
