@@ -33,7 +33,6 @@ pub struct Editor {
 impl Editor {
     pub fn init() -> Self {
         let mut keymaps = Keymaps::default();
-        keymaps.register_keymap_for_mode(&Mode::Xd, Keymap::xd());
         keymaps.register_keymap_for_mode(&Mode::Insert, Keymap::insert_mode());
         keymaps.register_keymap_for_mode(&Mode::Normal, Keymap::normal_mode());
 

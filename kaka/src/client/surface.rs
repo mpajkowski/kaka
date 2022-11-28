@@ -16,7 +16,6 @@ pub struct Cell {
 
 impl Cell {
     pub fn set_symbol(&mut self, sym: &str) -> &mut Self {
-
         self.symbol.clear();
         self.symbol.push_str(sym);
         self
@@ -118,8 +117,7 @@ impl Surface {
 
         let graphemes = UnicodeSegmentation::graphemes(string.as_ref(), true);
 
-        let max_offset =
-            (self.area.right() as usize).min(width.saturating_add(pos.x as usize)) as usize;
+        let max_offset = (self.area.right() as usize).min(width.saturating_add(pos.x as usize));
 
         for s in graphemes {
             let width = s.width();

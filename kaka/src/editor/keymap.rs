@@ -39,22 +39,6 @@ impl Keymap {
         self.0.get(&event)
     }
 
-    /// some input paths used for tests
-    pub fn xd() -> Self {
-        let mappings = [
-            ("q", command!(close)),
-            ("x", command!(print_a)),
-            ("i", command!(switch_to_insert_mode_before)),
-            ("a", command!(switch_to_insert_mode_after)),
-            ("gac", command!(print_a)),
-            ("gz", command!(print_a)),
-            ("<C-a>x", command!(print_a)),
-            ("<C-a><C-b>d", command!(print_a)),
-        ];
-
-        Self::with_mappings(mappings)
-    }
-
     pub fn insert_mode() -> Self {
         Self::with_mappings([("<ESC>", command!(switch_to_normal_mode))])
     }
@@ -74,7 +58,6 @@ impl Keymap {
             ("G", command!(goto_line_default_bottom)),
             ("u", command!(undo)),
             ("<C-r>", command!(redo)),
-            ("<Space>xd", command!(switch_to_xd_mode)),
             ("zs", command!(save)), // tmp
             ("ZZ", command!(close)),
             ("x", command!(remove_char)),
@@ -89,9 +72,7 @@ impl Keymap {
         Self::with_mappings(mappings)
     }
 
-    pub fn with_mappings(
-        mappings: impl IntoIterator<Item = (&'static str, Command)>,
-    ) -> Self {
+    pub fn with_mappings(mappings: impl IntoIterator<Item = (&'static str, Command)>) -> Self {
         let mut keymap = Self::default();
 
         let mut mappings = mappings
@@ -165,7 +146,7 @@ mod test {
 
     #[test]
     fn test_keymap() {
-        let keymap = Keymap::xd();
+        let keymap = Keymap::normal_mode();
         println!("Keymap {keymap:#?}");
     }
 }

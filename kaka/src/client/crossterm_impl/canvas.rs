@@ -52,6 +52,7 @@ impl<T: Write> CrosstermCanvas<T> {
 
     fn setup_panic() {
         let hook = std::panic::take_hook();
+
         std::panic::set_hook(Box::new(move |info| {
             let mut stdout = stdout();
             stdout.execute(LeaveAlternateScreen).ok();
@@ -61,7 +62,6 @@ impl<T: Write> CrosstermCanvas<T> {
         }));
     }
 }
-
 
 impl<T: Write> Canvas for CrosstermCanvas<T> {
     fn clear(&mut self) -> Result<()> {
@@ -81,7 +81,7 @@ impl<T: Write> Canvas for CrosstermCanvas<T> {
         let mut modifier = Modifier::empty();
 
         for (point, cell) in cells {
-            if !matches!(prev_point, Some(p) if point.x == p.x +1 && point.y == p.y) {
+            if !matches!(prev_point, Some(p) if point.x == p.x + 1 && point.y == p.y) {
                 queue!(self.writer, MoveTo(point.x, point.y))?;
             }
 
