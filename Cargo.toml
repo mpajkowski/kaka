@@ -1,10 +1,15 @@
 [workspace]
-members = ["kaka-core", "kaka-treesitter", "kaka", "xtask"]
-default-members = ["kaka"]
+members = [
+    "crates/kaka-core",
+    "crates/kaka-treesitter",
+    "crates/kaka",
+    "xtask"
+]
+default-members = ["crates/kaka"]
 
-[profile.dev.package.'*']
-opt-level = 3
-
-[profile.dev]
-opt-level = 1
-
+#[profile.dev.package.'*']
+#opt-level = 3
+#
+#[profile.dev]
+#opt-level = 1
+#
