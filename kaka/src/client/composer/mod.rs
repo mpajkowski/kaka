@@ -1,4 +1,5 @@
 mod editor;
+mod layouter;
 mod prompt;
 mod widget;
 
@@ -9,9 +10,8 @@ pub use editor::EditorWidget;
 pub use prompt::PromptWidget;
 
 use kaka_core::shapes::{Point, Rect};
-use unicode_width::UnicodeWidthChar;
 
-use crate::{current, editor::Editor};
+use crate::editor::Editor;
 
 pub use self::widget::Widget;
 
@@ -23,10 +23,11 @@ pub struct Context<'a> {
     pub editor: &'a mut Editor,
 }
 
+type Widgets = Vec<(TypeId, (Box<dyn Widget>, Rect))>;
+
 pub struct Composer {
-    widgets: Vec<(TypeId, Box<dyn Widget>)>,
+    widgets: Widgets,
     surfaces: Surfaces,
-    cursor: Point,
 }
 
 pub struct EventOutcome {
@@ -77,7 +78,6 @@ impl Composer {
         Self {
             surfaces,
             widgets: vec![],
-            cursor: Point::new(0, 0),
         }
     }
 
@@ -87,20 +87,28 @@ impl Composer {
         ctx: &mut Context<'_>,
     ) -> anyhow::Result<()> {
         let current_surface = self.surfaces.surface_mut();
-        let area = current_surface.area;
 
-        for (_, w) in &self.widgets {
-            w.draw(area, current_surface, ctx);
+        for (_, (w, area)) in &self.widgets {
+            w.draw(*area, current_surface, ctx);
         }
 
-        self.surfaces.render(canvas, self.cursor)?;
+        let cursor = self.widgets.iter().rev().find_map(|(_, (w, _))| w.cursor());
+
+        self.surfaces.render(canvas, cursor)?;
 
         Ok(())
     }
 
     pub fn handle_event(&mut self, event: Event, ctx: &mut Context) -> Redraw {
         let resized = if let Event::Resize(x, y) = event {
-            self.surfaces.resize(Rect::new(0, 0, x, y));
+            let viewport = Rect::new(0, 0, x, y);
+
+            self.surfaces.resize(viewport);
+
+            for (_, (w, area)) in self.widgets.iter_mut() {
+                *area = w.area(viewport);
+            }
+
             true
         } else {
             false
@@ -108,8 +116,8 @@ impl Composer {
 
         let mut consumed = false;
         let mut callbacks = vec![];
-        for (_, widget) in self.widgets.iter_mut().rev() {
-            let EventOutcome { callback, result } = widget.handle_event(&event, ctx);
+        for (_, (widget, area)) in self.widgets.iter_mut().rev() {
+            let EventOutcome { callback, result } = widget.handle_event(*area, &event, ctx);
             callbacks.extend(callback);
             consumed = result == EventResult::Consumed;
             if consumed {
@@ -121,34 +129,15 @@ impl Composer {
             callback(self);
         }
 
-        let surface = self.surfaces.surface();
-
-        let (buf, doc) = current!(ctx.editor);
-
-        let text = doc.text();
-
-        let pos = buf.text_pos();
-        let line_idx = buf.line_idx();
-        let start_x = buf.line_char();
-
-        let chars = pos.saturating_sub(start_x);
-        let line = text.line(buf.line_idx());
-        let mut x = 0;
-
-        for i in 0..chars {
-            x += line.char(i).width().unwrap_or(1);
-        }
-
-        let cursor_x = x.min(surface.area.width() as usize);
-        let cursor_y = line_idx.min(surface.area.height() as usize);
-
-        self.cursor = Point::new(cursor_x as u16, cursor_y as u16);
-
         Redraw(consumed || resized)
     }
 
     pub fn push_widget<W: Widget + 'static>(&mut self, widget: W) {
-        self.widgets.push((TypeId::of::<W>(), Box::new(widget)));
+        let viewport = self.surfaces.surface().area;
+        let area = widget.area(viewport);
+
+        self.widgets
+            .push((TypeId::of::<W>(), (Box::new(widget), area)));
     }
 
     pub fn remove_widget<W: Widget>(&mut self) {
@@ -180,15 +169,23 @@ impl Surfaces {
         &self.surfaces[self.current_surface]
     }
 
-    pub fn render<C: Canvas>(&mut self, canvas: &mut C, cursor: Point) -> anyhow::Result<()> {
+    pub fn render<C: Canvas>(
+        &mut self,
+        canvas: &mut C,
+        cursor: Option<Point>,
+    ) -> anyhow::Result<()> {
         let current_surface = &self.surfaces[self.current_surface];
         let prev_surface = &self.surfaces[1 - self.current_surface];
 
         canvas.hide_cursor()?;
         let diff = prev_surface.diff(current_surface);
         canvas.draw(diff)?;
-        canvas.move_cursor(cursor)?;
-        canvas.show_cursor()?;
+
+        if let Some(cursor) = cursor {
+            canvas.move_cursor(cursor)?;
+            canvas.show_cursor()?;
+        }
+
         canvas.flush()?;
 
         // swap surfaces

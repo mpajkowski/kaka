@@ -6,7 +6,7 @@ use crate::client::{
     surface::Surface,
 };
 
-use super::{widget::Widget, Context, EventOutcome};
+use super::{layouter, widget::Widget, Context, EventOutcome};
 
 pub struct PromptWidget {
     char: char,
@@ -23,9 +23,9 @@ impl PromptWidget {
 }
 
 impl Widget for PromptWidget {
-    fn draw(&self, area: Rect, surface: &mut Surface, _ctx: &mut Context<'_>) {
-        let line = area.height().saturating_sub(1);
-        let width = area.width();
+    fn draw(&self, area: Rect, surface: &mut Surface, _ctx: &Context<'_>) {
+        let line = area.height.saturating_sub(1);
+        let width = area.width;
 
         surface.set_stringn(
             Point::new(0, line),
@@ -35,7 +35,12 @@ impl Widget for PromptWidget {
         );
     }
 
-    fn handle_event(&mut self, event: &Event, _ctx: &mut Context) -> super::EventOutcome {
+    fn handle_event(
+        &mut self,
+        _area: Rect,
+        event: &Event,
+        _ctx: &mut Context,
+    ) -> super::EventOutcome {
         if let Event::Key(k) = event {
             if let crossterm::event::KeyCode::Char(c) = k.code {
                 self.line.push(c);
@@ -46,5 +51,9 @@ impl Widget for PromptWidget {
         } else {
             EventOutcome::ignored()
         }
+    }
+
+    fn area(&self, viewport: Rect) -> Rect {
+        layouter::prompt(viewport)
     }
 }

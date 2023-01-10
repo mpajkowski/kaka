@@ -156,15 +156,15 @@ impl Surface {
             self.area
         );
 
-        ((pos.y - self.area.y()) * self.area.width() + (pos.x - self.area.x())) as usize
+        ((pos.y - self.area.y) * self.area.width + (pos.x - self.area.x)) as usize
     }
 
     pub fn diff<'a>(&'a self, other: &'a Self) -> Diff<'a> {
         let previous_buffer = &self.content;
         let next_buffer = &other.content;
-        let width = self.area.width();
+        let width = self.area.width;
 
-        debug_assert_eq!(width, other.area.width());
+        debug_assert_eq!(width, other.area.width);
 
         Diff::new(previous_buffer, next_buffer, width)
     }
@@ -287,7 +287,7 @@ mod test {
         let old = surface_10x10("a");
         let new = surface_10x10("a");
 
-        let diff = Diff::new(&old.content, &new.content, old.area.width() as _);
+        let diff = Diff::new(&old.content, &new.content, old.area.width as _);
 
         assert_eq!(diff.count(), 0);
     }
@@ -299,7 +299,7 @@ mod test {
 
         new.content[0] = Cell::default();
 
-        let mut diff = Diff::new(&old.content, &new.content, old.area.width() as _);
+        let mut diff = Diff::new(&old.content, &new.content, old.area.width as _);
 
         assert_eq!(diff.next(), Some((Point::new(0, 0), &Cell::default())));
         assert_eq!(diff.next(), None);
@@ -312,7 +312,7 @@ mod test {
 
         new.content[42] = Cell::default();
 
-        let mut diff = Diff::new(&old.content, &new.content, old.area.width() as _);
+        let mut diff = Diff::new(&old.content, &new.content, old.area.width as _);
 
         assert_eq!(diff.next(), Some((Point::new(2, 4), &Cell::default())));
         assert_eq!(diff.next(), None);
@@ -324,7 +324,7 @@ mod test {
         let mut new = surface_10x10("a");
         new.content[99] = Cell::default();
 
-        let mut diff = Diff::new(&old.content, &new.content, old.area.width() as _);
+        let mut diff = Diff::new(&old.content, &new.content, old.area.width as _);
 
         assert_eq!(diff.next(), Some((Point::new(9, 9), &Cell::default())));
         assert_eq!(diff.next(), None);
@@ -335,7 +335,7 @@ mod test {
         let old = surface_10x10("🚀");
         let new = surface_10x10("⛄");
 
-        let diff = Diff::new(&old.content, &new.content, old.area.width() as _);
+        let diff = Diff::new(&old.content, &new.content, old.area.width as _);
 
         assert_eq!(diff.count(), 50);
     }

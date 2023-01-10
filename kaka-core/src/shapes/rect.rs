@@ -1,9 +1,9 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Rect {
-    x: u16,
-    y: u16,
-    width: u16,
-    height: u16,
+    pub x: u16,
+    pub y: u16,
+    pub width: u16,
+    pub height: u16,
 }
 
 impl Rect {
@@ -32,20 +32,15 @@ impl Rect {
         }
     }
 
-    pub const fn width(self) -> u16 {
-        self.width
-    }
+    pub fn scaled(self, scale: f32) -> Self {
+        let width = (self.width as f32 * scale) as u16;
+        let height = (self.height as f32 * scale) as u16;
 
-    pub const fn height(self) -> u16 {
-        self.height
-    }
-
-    pub const fn x(self) -> u16 {
-        self.x
-    }
-
-    pub const fn y(self) -> u16 {
-        self.y
+        Self {
+            width,
+            height,
+            ..self
+        }
     }
 
     pub const fn left(self) -> u16 {

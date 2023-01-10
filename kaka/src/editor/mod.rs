@@ -11,10 +11,13 @@ pub use buffer::{Buffer, BufferId};
 use crossterm::event::KeyEvent;
 use kaka_core::document::{Document, DocumentId};
 use kaka_core::ropey::Rope;
+use kaka_core::shapes::{Point, Rect};
 pub use keymap::{Keymap, KeymapTreeElement};
 pub use mode::Mode;
+use unicode_width::UnicodeWidthChar;
 
 use crate::client::Redraw;
+use crate::current;
 
 pub use self::command::{insert_mode_on_key, Command, CommandData};
 pub use self::keymap::Keymaps;
@@ -80,6 +83,24 @@ impl Editor {
 
     pub const fn should_exit(&self) -> bool {
         self.exit_code.is_some()
+    }
+
+    pub fn cursor(&self, area: Rect) -> Point {
+        let (buf, doc) = current!(self);
+        let line_idx = buf.line_idx();
+        let y = (area.width as usize).min(line_idx - buf.vscroll());
+        let x: usize = {
+            let distance = buf.text_pos() - buf.line_char();
+            let line = doc.text().line(line_idx);
+            (0..distance)
+                .map(|i| line.char(i).width().unwrap_or(1))
+                .sum()
+        };
+
+        Point {
+            x: x as u16 + area.x,
+            y: y as u16 + area.y,
+        }
     }
 
     pub fn set_logger(&mut self, id: BufferId) {

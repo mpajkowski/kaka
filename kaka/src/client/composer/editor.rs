@@ -1,7 +1,7 @@
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use kaka_core::shapes::{Point, Rect};
 
-use super::{widget::Widget, Context, EventOutcome, EventResult};
+use super::{layouter, widget::Widget, Context, EventOutcome, EventResult};
 use crate::{
     client::{
         style::{Color, Style},
@@ -11,11 +11,22 @@ use crate::{
     editor::{self, insert_mode_on_key, Buffer, Command, KeymapTreeElement, Keymaps},
 };
 
-#[derive(Default)]
 pub struct EditorWidget {
     buffered_keys: Vec<KeyEvent>,
     count: Option<usize>,
     insert_on: bool,
+    cursor: Point,
+}
+
+impl Default for EditorWidget {
+    fn default() -> Self {
+        Self {
+            buffered_keys: vec![],
+            count: None,
+            insert_on: false,
+            cursor: Point::new(0, 0),
+        }
+    }
 }
 
 impl EditorWidget {
@@ -112,34 +123,36 @@ impl EditorWidget {
 }
 
 impl Widget for EditorWidget {
-    fn draw(&self, area: Rect, surface: &mut Surface, ctx: &mut Context<'_>) {
-        // TODO scroll
-        let (_, doc) = current!(ctx.editor);
+    fn draw(&self, area: Rect, surface: &mut Surface, ctx: &Context<'_>) {
+        let (buf, doc) = current!(ctx.editor);
 
         let text = doc.text();
 
-        let max_y = (area.height() as usize).min(text.len_lines());
-        let end = text.line_to_char(max_y);
-
-        let text = text.slice(0..end);
+        let max_y = (area.height as usize).min(text.len_lines());
+        let vscroll = buf.vscroll();
 
         let style = Style::default().fg(Color::Yellow).bg(Color::Black);
 
         for y in 0..max_y {
-            let line = text.line(y);
+            let line = text.line(y + vscroll);
 
-            let line_render = line.slice(0..(area.width() as usize).min(line.len_chars()));
+            let line_render = line.slice(0..(area.width as usize).min(line.len_chars()));
 
             surface.set_stringn(
-                Point::new(0, y as u16),
+                Point::new(area.x, y as u16),
                 &line_render.to_string(),
-                area.width() as usize,
+                area.width as usize,
                 style,
             );
         }
     }
 
-    fn handle_event(&mut self, event: &Event, ctx: &mut Context) -> super::EventOutcome {
+    fn handle_event(
+        &mut self,
+        area: Rect,
+        event: &Event,
+        ctx: &mut Context,
+    ) -> super::EventOutcome {
         let (buf, _) = current_mut!(ctx.editor);
 
         let key_event = match event {
@@ -171,10 +184,23 @@ impl Widget for EditorWidget {
 
         let callback = context.callback;
 
+        let (buf, _) = current_mut!(ctx.editor);
+        buf.update_vscroll(area.height as usize);
+
+        self.cursor = ctx.editor.cursor(area);
+
         EventOutcome {
             callback,
             result: EventResult::Consumed,
         }
+    }
+
+    fn cursor(&self) -> Option<Point> {
+        Some(self.cursor)
+    }
+
+    fn area(&self, viewport: Rect) -> Rect {
+        layouter::editor(viewport)
     }
 }
 

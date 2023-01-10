@@ -24,7 +24,7 @@ async fn main() -> anyhow::Result<()> {
         env_logger::init();
     }
 
-    let crossterm_canvas = client::CrosstermCanvas::new(stdout(), true)?;
+    let crossterm_canvas = client::CrosstermCanvas::new(stdout())?;
     let client = Client::new(crossterm_canvas);
 
     let mut app = App::new(client, ());

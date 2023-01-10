@@ -314,11 +314,11 @@ pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
                 }
                 KeyCode::Backspace => {
                     if pos > 0 {
-                        pos -= 1;
-                        text.remove(pos..pos);
+                        text.remove(pos - 1..pos);
 
                         tx.move_backward_by(1);
                         tx.delete(1);
+                        pos -= 1;
                     }
                 }
                 KeyCode::Enter => {

@@ -1,4 +1,7 @@
-use std::io::{self, stdout, Write};
+use std::{
+    any::{Any, TypeId},
+    io::{self, stdout, Stdout, Write},
+};
 
 use anyhow::Result;
 use crossterm::{
@@ -22,16 +25,18 @@ use crate::client::{
 
 use super::RawTerminalGuard;
 
-pub struct CrosstermCanvas<T> {
+pub struct CrosstermCanvas<T: Write + Any> {
     writer: T,
     rect: Rect,
     _raw_terminal_guard: Option<RawTerminalGuard>,
 }
 
-impl<T: Write> CrosstermCanvas<T> {
-    pub fn new(writer: T, setup_environment: bool) -> Result<Self> {
+impl<T: Write + Any> CrosstermCanvas<T> {
+    pub fn new(writer: T) -> Result<Self> {
         let (width, height) = crossterm::terminal::size()?;
         let start_point = Point::new(0, 0);
+
+        let setup_environment = writer.type_id() == TypeId::of::<Stdout>();
 
         if setup_environment {
             Self::setup_panic();
@@ -63,7 +68,14 @@ impl<T: Write> CrosstermCanvas<T> {
     }
 }
 
-impl<T: Write> Canvas for CrosstermCanvas<T> {
+impl<T: Write + Any> Drop for CrosstermCanvas<T> {
+    fn drop(&mut self) {
+        self.writer.execute(LeaveAlternateScreen).ok();
+        crossterm::terminal::disable_raw_mode().ok();
+    }
+}
+
+impl<T: Write + Any> Canvas for CrosstermCanvas<T> {
     fn clear(&mut self) -> Result<()> {
         execute!(self.writer, Clear(ClearType::All))?;
         Ok(())
@@ -228,46 +240,5 @@ impl ModifierDiff {
         }
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use std::io::Cursor;
-
-    #[test]
-    fn canvas_write() {
-        let cells = [
-            (
-                Point::new(0, 0),
-                &Cell {
-                    symbol: "a".to_string(),
-                    ..Default::default()
-                },
-            ),
-            (
-                Point::new(0, 1),
-                &Cell {
-                    symbol: "b".to_string(),
-                    ..Default::default()
-                },
-            ),
-            (
-                Point::new(0, 2),
-                &Cell {
-                    symbol: "c".to_string(),
-                    ..Default::default()
-                },
-            ),
-        ];
-
-        let mut data = vec![] as Vec<u8>;
-        let cursor = Cursor::new(&mut data);
-        let mut canvas = CrosstermCanvas::new(cursor, false).unwrap();
-        canvas.draw(cells.into_iter()).unwrap();
-        drop(canvas);
-
-        println!("Data: {data:?}");
     }
 }

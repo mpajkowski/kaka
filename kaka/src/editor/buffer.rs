@@ -38,6 +38,7 @@ pub struct Buffer {
     text_pos: usize,
     line_idx: usize,
     line_char: usize,
+    vscroll: usize,
 }
 
 impl Buffer {
@@ -79,6 +80,7 @@ impl Buffer {
             line_idx: 0,
             line_char: 0,
             immortal,
+            vscroll: 0,
         };
 
         this.set_mode_impl(start_mode)?;
@@ -122,6 +124,21 @@ impl Buffer {
 
     pub const fn line_char(&self) -> usize {
         self.line_char
+    }
+
+    pub const fn vscroll(&self) -> usize {
+        self.vscroll
+    }
+
+    pub fn update_vscroll(&mut self, max: usize) {
+        let lower_bound = self.vscroll;
+        let upper_bound = self.vscroll + max - 1;
+
+        if self.line_idx >= upper_bound {
+            self.vscroll += self.line_idx - upper_bound;
+        } else if self.line_idx < lower_bound {
+            self.vscroll -= lower_bound - self.line_idx;
+        }
     }
 
     pub fn update_text_position(
