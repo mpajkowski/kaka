@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     let crossterm_canvas = client::CrosstermCanvas::new(stdout())?;
     let client = Client::new(crossterm_canvas);
 
-    let mut app = App::new(client, ());
+    let mut app = App::new(client);
     app.run(std::env::args(), &mut EventStream::new()).await?;
 
     Ok(())

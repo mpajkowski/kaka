@@ -43,7 +43,7 @@ impl EditorWidget {
         let code = event.code;
 
         let count = match code {
-            KeyCode::Char(c) if ('0'..='9').contains(&c) => c,
+            KeyCode::Char(c) if c.is_ascii_digit() => c,
             _ => return,
         };
 
