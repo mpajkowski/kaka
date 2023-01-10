@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "crates/kaka-core",
-    "crates/kaka-treesitter",
     "crates/kaka",
     "xtask"
 ]

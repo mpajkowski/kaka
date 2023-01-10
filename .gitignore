@@ -2,4 +2,3 @@
 testbuf
 /coverage
 *.profraw
-crates/kaka-treesitter/languages/obj

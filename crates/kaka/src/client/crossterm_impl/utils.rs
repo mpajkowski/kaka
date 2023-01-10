@@ -13,7 +13,7 @@ impl RawTerminalGuard {
         crossterm::terminal::enable_raw_mode()?;
         let mut stdout = stdout();
         stdout.execute(EnterAlternateScreen)?;
-        Ok(RawTerminalGuard)
+        Ok(Self)
     }
 }
 

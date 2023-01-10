@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 kaka-core = { path = "../kaka-core" }
-kaka-treesitter = { path = "../kaka-treesitter" }
 
 crossterm = { version = "0.25.0", features = ["futures-core", "event-stream"] }
 thiserror = "1.0.38"
