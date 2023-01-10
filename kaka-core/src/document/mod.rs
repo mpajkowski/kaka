@@ -1,6 +1,7 @@
 mod error;
 
 pub use error::Error;
+use unicode_width::UnicodeWidthChar;
 
 use std::{
     fs::File,
@@ -107,6 +108,14 @@ impl Document {
 
     pub const fn id(&self) -> DocumentId {
         self.id
+    }
+
+    pub fn column(&self, line_idx: usize, char_idx: usize) -> usize {
+        let line = self.text.line(line_idx);
+
+        (0..char_idx)
+            .map(|i| line.char(i).width().unwrap_or(1))
+            .sum()
     }
 
     pub fn save(&self) -> Result<(), std::io::Error> {

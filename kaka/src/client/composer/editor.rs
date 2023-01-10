@@ -1,10 +1,10 @@
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use kaka_core::shapes::{Point, Rect};
 
-use super::{layouter, widget::Widget, Context, EventOutcome, EventResult};
+use super::{layouter, widget::Widget, Context, Cursor, EventOutcome, EventResult};
 use crate::{
     client::{
-        style::{Color, Style},
+        style::{Color, CursorKind, Style},
         surface::Surface,
     },
     current, current_mut,
@@ -15,7 +15,7 @@ pub struct EditorWidget {
     buffered_keys: Vec<KeyEvent>,
     count: Option<usize>,
     insert_on: bool,
-    cursor: Point,
+    cursor: Cursor,
 }
 
 impl Default for EditorWidget {
@@ -24,7 +24,7 @@ impl Default for EditorWidget {
             buffered_keys: vec![],
             count: None,
             insert_on: false,
-            cursor: Point::new(0, 0),
+            cursor: Cursor(Point::new(0, 0), CursorKind::Block),
         }
     }
 }
@@ -195,7 +195,7 @@ impl Widget for EditorWidget {
         }
     }
 
-    fn cursor(&self) -> Option<Point> {
+    fn cursor(&self) -> Option<Cursor> {
         Some(self.cursor)
     }
 

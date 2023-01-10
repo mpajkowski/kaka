@@ -15,7 +15,7 @@ use crate::editor::Editor;
 
 pub use self::widget::Widget;
 
-use super::{canvas::Canvas, surface::Surface, Redraw};
+use super::{canvas::Canvas, style::CursorKind, surface::Surface, Redraw};
 
 pub type Callback = Box<dyn FnOnce(&mut Composer)>;
 
@@ -172,7 +172,7 @@ impl Surfaces {
     pub fn render<C: Canvas>(
         &mut self,
         canvas: &mut C,
-        cursor: Option<Point>,
+        cursor: Option<Cursor>,
     ) -> anyhow::Result<()> {
         let current_surface = &self.surfaces[self.current_surface];
         let prev_surface = &self.surfaces[1 - self.current_surface];
@@ -182,7 +182,8 @@ impl Surfaces {
         canvas.draw(diff)?;
 
         if let Some(cursor) = cursor {
-            canvas.move_cursor(cursor)?;
+            canvas.move_cursor(cursor.0)?;
+            canvas.set_cursor_kind(cursor.1)?;
             canvas.show_cursor()?;
         }
 
@@ -200,3 +201,6 @@ impl Surfaces {
         self.surfaces[1 - self.current_surface].resize(rect);
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Cursor(pub Point, pub CursorKind);

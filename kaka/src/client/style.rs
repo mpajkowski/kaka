@@ -118,3 +118,10 @@ impl Style {
         self
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CursorKind {
+    Block,
+    Line,
+    Underscore,
+}

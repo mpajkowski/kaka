@@ -1,11 +1,11 @@
 use std::any::Any;
 
 use crossterm::event::Event;
-use kaka_core::shapes::{Point, Rect};
+use kaka_core::shapes::Rect;
 
 use crate::client::surface::Surface;
 
-use super::{Context, EventOutcome};
+use super::{Context, Cursor, EventOutcome};
 
 pub trait Widget: Any {
     fn draw(&self, area: Rect, surface: &mut Surface, ctx: &Context<'_>);
@@ -23,7 +23,7 @@ pub trait Widget: Any {
         EventOutcome::ignored()
     }
 
-    fn cursor(&self) -> Option<Point> {
+    fn cursor(&self) -> Option<Cursor> {
         None
     }
 

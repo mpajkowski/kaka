@@ -14,8 +14,8 @@ use kaka_core::ropey::Rope;
 use kaka_core::shapes::{Point, Rect};
 pub use keymap::{Keymap, KeymapTreeElement};
 pub use mode::Mode;
-use unicode_width::UnicodeWidthChar;
 
+use crate::client::composer::Cursor;
 use crate::client::Redraw;
 use crate::current;
 
@@ -85,22 +85,23 @@ impl Editor {
         self.exit_code.is_some()
     }
 
-    pub fn cursor(&self, area: Rect) -> Point {
+    pub fn cursor(&self, area: Rect) -> Cursor {
         let (buf, doc) = current!(self);
         let line_idx = buf.line_idx();
         let y = (area.width as usize).min(line_idx - buf.vscroll());
-        let x: usize = {
+        let x = {
             let distance = buf.text_pos() - buf.line_char();
-            let line = doc.text().line(line_idx);
-            (0..distance)
-                .map(|i| line.char(i).width().unwrap_or(1))
-                .sum()
+            doc.column(line_idx, distance)
         };
 
-        Point {
+        let point = Point {
             x: x as u16 + area.x,
             y: y as u16 + area.y,
-        }
+        };
+
+        let kind = buf.mode().cursor_kind();
+
+        Cursor(point, kind)
     }
 
     pub fn set_logger(&mut self, id: BufferId) {

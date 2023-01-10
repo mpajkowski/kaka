@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::Result;
 use crossterm::{
-    cursor::{Hide, MoveTo, Show},
+    cursor::{CursorShape, Hide, MoveTo, SetCursorShape, Show},
     execute, queue,
     style::{
         Attribute as CAttribute, Color as CColor, Print, SetAttribute, SetBackgroundColor,
@@ -18,7 +18,7 @@ use crossterm::{
 use kaka_core::shapes::{Point, Rect};
 
 use crate::client::{
-    style::{Color, Modifier},
+    style::{Color, CursorKind, Modifier},
     surface::Cell,
     Canvas,
 };
@@ -152,6 +152,17 @@ impl<T: Write + Any> Canvas for CrosstermCanvas<T> {
 
     fn show_cursor(&mut self) -> Result<()> {
         execute!(self.writer, Show)?;
+        Ok(())
+    }
+
+    fn set_cursor_kind(&mut self, kind: CursorKind) -> Result<()> {
+        let shape = match kind {
+            CursorKind::Block => CursorShape::Block,
+            CursorKind::Line => CursorShape::Line,
+            CursorKind::Underscore => CursorShape::UnderScore,
+        };
+
+        execute!(self.writer, SetCursorShape(shape))?;
         Ok(())
     }
 }
