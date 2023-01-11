@@ -1,6 +1,6 @@
 use kaka_core::{
     document::{TransactionAttachPolicy, TransactionLeave},
-    graphemes::nth_next_grapheme_boundary,
+    graphemes::{nth_next_grapheme_boundary, nth_prev_grapheme_boundary},
 };
 
 use crate::{
@@ -14,38 +14,63 @@ use crate::{
 
 use super::CommandData;
 
-pub fn switch_to_insert_mode_before(ctx: &mut CommandData) {
-    switch_to_insert_mode_impl(ctx, false);
+#[derive(Debug)]
+enum Switch {
+    Inplace,
+    After,
+    LineStart,
+    LineEnd,
+}
+
+pub fn switch_to_insert_mode_inplace(ctx: &mut CommandData) {
+    switch_to_insert_mode_impl(ctx, Switch::Inplace);
 }
 
 pub fn switch_to_insert_mode_after(ctx: &mut CommandData) {
-    switch_to_insert_mode_impl(ctx, true);
+    switch_to_insert_mode_impl(ctx, Switch::After);
 }
 
-fn switch_to_insert_mode_impl(ctx: &mut CommandData, after: bool) {
+pub fn switch_to_insert_mode_line_start(ctx: &mut CommandData) {
+    switch_to_insert_mode_impl(ctx, Switch::LineStart);
+}
+
+pub fn switch_to_insert_mode_line_end(ctx: &mut CommandData) {
+    switch_to_insert_mode_impl(ctx, Switch::LineEnd);
+}
+
+fn switch_to_insert_mode_impl(ctx: &mut CommandData, switch: Switch) {
     let repeat = ctx.count.unwrap_or(1).max(1);
 
     let (buf, doc) = current_mut!(ctx.editor);
 
     buf.switch_mode(Mode::Insert);
 
-    doc.with_transaction(
-        TransactionAttachPolicy::Disallow,
-        buf.text_pos(),
-        |doc, tx| {
-            if after {
-                let line_char = buf.line_char();
-                let pos = line_char
-                    + nth_next_grapheme_boundary(doc.text().line(buf.line_idx()), line_char, 1);
-                buf.update_text_position(doc, pos, UpdateBufPositionParams::inserting_text());
-                tx.move_forward_by(pos);
+    let pos = buf.text_pos();
+
+    doc.with_transaction(TransactionAttachPolicy::Disallow, pos, |doc, tx| {
+        let text = doc.text().slice(..);
+
+        let new_pos = match switch {
+            Switch::Inplace => pos,
+            Switch::After => nth_next_grapheme_boundary(text, pos, 1),
+            Switch::LineStart => buf.line_char(),
+            Switch::LineEnd => {
+                let eol = text
+                    .try_line_to_char(buf.line_idx() + 1)
+                    .unwrap_or_else(|_| text.len_chars());
+
+                nth_prev_grapheme_boundary(text, eol, 1)
             }
+        };
 
-            tx.set_repeat(repeat);
+        if buf.update_text_position(doc, new_pos, UpdateBufPositionParams::inserting_text()) {
+            tx.move_to(new_pos);
+        }
 
-            TransactionLeave::Keep
-        },
-    );
+        tx.set_repeat(repeat);
+
+        TransactionLeave::Keep
+    });
 }
 
 pub fn switch_to_normal_mode(ctx: &mut CommandData) {
@@ -79,4 +104,26 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
 
 pub fn command_mode(ctx: &mut CommandData) {
     ctx.push_widget(PromptWidget::new(':'));
+}
+
+#[cfg(test)]
+mod test {
+    use super::super::test::*;
+    use super::*;
+
+    #[test]
+    fn transaction_opened() {
+        test_cmd(0, "", switch_to_insert_mode_after, |_: B, doc: D| {
+            assert!(doc.transaction_active());
+        });
+        test_cmd(0, "", switch_to_insert_mode_inplace, |_: B, doc: D| {
+            assert!(doc.transaction_active());
+        });
+        test_cmd(0, "", switch_to_insert_mode_line_end, |_: B, doc: D| {
+            assert!(doc.transaction_active());
+        });
+        test_cmd(0, "", switch_to_insert_mode_line_start, |_: B, doc: D| {
+            assert!(doc.transaction_active());
+        });
+    }
 }

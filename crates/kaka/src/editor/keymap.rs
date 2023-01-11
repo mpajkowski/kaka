@@ -46,8 +46,10 @@ impl Keymap {
     pub fn normal_mode() -> Self {
         let mappings = [
             // mode
-            ("i", command!(switch_to_insert_mode_before)),
+            ("i", command!(switch_to_insert_mode_inplace)),
+            ("I", command!(switch_to_insert_mode_line_start)),
             ("a", command!(switch_to_insert_mode_after)),
+            ("A", command!(switch_to_insert_mode_line_end)),
             // movement
             ("h", command!(move_left)),
             ("j", command!(move_down)),
