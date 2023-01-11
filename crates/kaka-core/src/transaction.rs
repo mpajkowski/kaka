@@ -1,9 +1,161 @@
-use std::{borrow::Cow, num::NonZeroUsize};
+use std::{borrow::Cow, cmp::Ordering, num::NonZeroUsize};
 
 use ropey::Rope;
 use smartstring::LazyCompact;
 
 pub type SmartString = smartstring::SmartString<LazyCompact>;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Change {
+    /// Move forward by offset
+    MoveForward(usize),
+
+    /// Insert string
+    Insert(SmartString),
+
+    /// Delete
+    Delete(usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Transaction {
+    repeat: NonZeroUsize,
+    len_before: usize,
+    len_after: usize,
+    changesets: Vec<ChangeSet>,
+}
+
+impl Transaction {
+    pub fn new(rope: &Rope, pos: usize) -> Self {
+        let len = rope.len_chars();
+
+        Self {
+            repeat: NonZeroUsize::new(1).unwrap(),
+            changesets: vec![ChangeSet::new(pos)],
+            len_before: len,
+            len_after: len,
+        }
+    }
+
+    pub fn replace(&mut self, ch: char) {
+        self.delete(1);
+        let mut buf = [0; 4];
+        let string = ch.encode_utf8(&mut buf);
+        self.insert(string);
+    }
+
+    pub fn insert_char(&mut self, c: char) {
+        let mut buf = SmartString::new_const();
+        buf.push(c);
+
+        self.insert(buf);
+    }
+
+    pub fn insert(&mut self, string: impl Into<SmartString>) {
+        let string = string.into();
+
+        if string.is_empty() {
+            return;
+        }
+
+        let strlen = self.changeset_head().insert(string);
+
+        self.len_after += strlen;
+    }
+
+    pub fn move_forward_by(&mut self, count: usize) {
+        self.changeset_head().move_forward_by(count);
+    }
+
+    pub fn move_to(&mut self, pos: usize) {
+        let end_pos = self.changeset_head().end_pos;
+
+        match pos.cmp(&end_pos) {
+            Ordering::Greater => self.move_forward_by(pos - end_pos),
+            Ordering::Less => self.move_backward_by(end_pos - pos),
+            Ordering::Equal => {}
+        }
+    }
+
+    pub fn move_backward_by(&mut self, count: usize) {
+        let head = self.changeset_head();
+
+        if head.changes.is_empty() {
+            head.start_pos -= count;
+            head.end_pos -= count;
+        } else {
+            let new_start_pos = head.end_pos - count;
+            self.changesets.push(ChangeSet::new(new_start_pos));
+        }
+    }
+
+    pub fn delete(&mut self, len: usize) {
+        self.changeset_head().delete(len);
+    }
+
+    pub fn set_repeat(&mut self, repeat: usize) {
+        self.repeat = repeat.try_into().expect("repeat must be greater than one");
+    }
+
+    pub fn apply(&self, rope: &mut Rope) -> usize {
+        self.apply_impl(rope, false)
+    }
+
+    pub fn apply_repeats(&self, rope: &mut Rope) -> usize {
+        self.apply_impl(rope, true)
+    }
+
+    #[track_caller]
+    fn apply_impl(&self, rope: &mut Rope, only_repeats: bool) -> usize {
+        let mut pos = 0;
+        let mut offset = None;
+        let pos1 = self.changesets[0].start_pos;
+
+        let repeat = self.repeat.get() - only_repeats as usize;
+
+        for _ in 0..repeat {
+            for change_set in self.changesets.iter() {
+                pos = change_set.apply(offset.unwrap_or(0), rope);
+            }
+
+            if offset.is_none() {
+                offset = Some(pos as isize - pos1 as isize);
+            }
+        }
+
+        pos
+    }
+
+    #[track_caller]
+    pub fn undo(&self, original: &Rope) -> Self {
+        debug_assert_eq!(original.len_chars(), self.len_before);
+
+        let mut revert = self
+            .changesets
+            .iter()
+            .map(|c| c.undo(original))
+            .collect::<Vec<_>>();
+
+        revert.reverse();
+
+        Self {
+            repeat: self.repeat,
+            len_before: self.len_after,
+            len_after: self.len_after,
+            changesets: revert,
+        }
+    }
+
+    pub fn changes_text(&self) -> bool {
+        self.changesets.iter().any(|ch| ch.changes_text())
+    }
+
+    fn changeset_head(&mut self) -> &mut ChangeSet {
+        self.changesets
+            .last_mut()
+            .expect("At least one changeset in transaction is expected")
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChangeSet {
@@ -122,161 +274,6 @@ impl ChangeSet {
         }
 
         revert
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Change {
-    /// Move forward by offset
-    MoveForward(usize),
-
-    /// Insert string
-    Insert(SmartString),
-
-    /// Delete
-    Delete(usize),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Transaction {
-    repeat: NonZeroUsize,
-    len_before: usize,
-    len_after: usize,
-    changesets: Vec<ChangeSet>,
-}
-
-impl Transaction {
-    pub fn new(rope: &Rope, pos: usize) -> Self {
-        let len = rope.len_chars();
-
-        Self {
-            repeat: NonZeroUsize::new(1).unwrap(),
-            changesets: vec![ChangeSet::new(pos)],
-            len_before: len,
-            len_after: len,
-        }
-    }
-
-    pub fn replace(&mut self, ch: char) {
-        self.delete(1);
-        let mut buf = [0; 4];
-        let string = ch.encode_utf8(&mut buf);
-        self.insert(string);
-    }
-
-    pub fn insert_char(&mut self, c: char) {
-        let mut buf = SmartString::new_const();
-        buf.push(c);
-
-        self.insert(buf);
-    }
-
-    pub fn insert(&mut self, string: impl Into<SmartString>) {
-        let string = string.into();
-
-        log::trace!("Transaction::insert: {string}");
-
-        if string.is_empty() {
-            return;
-        }
-
-        let strlen = self.changeset_head().insert(string);
-
-        self.len_after += strlen;
-        log::trace!("Transaction::insert: len_new={}", self.len_after);
-    }
-
-    pub fn move_forward_by(&mut self, count: usize) {
-        log::trace!("Transaction::move_forward_by({count})");
-        self.changeset_head().move_forward_by(count);
-    }
-
-    pub fn move_backward_by(&mut self, count: usize) {
-        log::trace!("Transaction::move_backward_by({count})");
-        let head = self.changeset_head();
-
-        if head.changes.is_empty() {
-            head.start_pos -= count;
-            head.end_pos -= count;
-        } else {
-            let new_start_pos = head.end_pos - count;
-            self.changesets.push(ChangeSet::new(new_start_pos));
-        }
-    }
-
-    pub fn delete(&mut self, len: usize) {
-        log::trace!("Transaction::delete({len})");
-
-        self.changeset_head().delete(len);
-    }
-
-    pub fn set_repeat(&mut self, repeat: usize) {
-        self.repeat = repeat.try_into().expect("repeat must be greater than one");
-    }
-
-    pub fn apply(&self, rope: &mut Rope) -> usize {
-        self.apply_impl(rope, false)
-    }
-
-    pub fn apply_repeats(&self, rope: &mut Rope) -> usize {
-        self.apply_impl(rope, true)
-    }
-
-    #[track_caller]
-    fn apply_impl(&self, rope: &mut Rope, only_repeats: bool) -> usize {
-        log::trace!("Transaction::apply()");
-
-        let mut pos = 0;
-        let mut offset = None;
-        let pos1 = self.changesets[0].start_pos;
-
-        let repeat = self.repeat.get() - only_repeats as usize;
-
-        for _ in 0..repeat {
-            for change_set in self.changesets.iter() {
-                pos = change_set.apply(offset.unwrap_or(0), rope);
-            }
-
-            if offset.is_none() {
-                offset = Some(pos as isize - pos1 as isize);
-            }
-        }
-
-        log::trace!("Transaction::apply(): exit");
-
-        pos
-    }
-
-    #[track_caller]
-    pub fn undo(&self, original: &Rope) -> Self {
-        log::trace!("Transaction::undo()");
-
-        debug_assert_eq!(original.len_chars(), self.len_before);
-
-        let mut revert = self
-            .changesets
-            .iter()
-            .map(|c| c.undo(original))
-            .collect::<Vec<_>>();
-
-        revert.reverse();
-
-        Self {
-            repeat: self.repeat,
-            len_before: self.len_after,
-            len_after: self.len_after,
-            changesets: revert,
-        }
-    }
-
-    pub fn changes_text(&self) -> bool {
-        self.changesets.iter().any(|ch| ch.changes_text())
-    }
-
-    fn changeset_head(&mut self) -> &mut ChangeSet {
-        self.changesets
-            .last_mut()
-            .expect("At least one changeset in transaction is expected")
     }
 }
 

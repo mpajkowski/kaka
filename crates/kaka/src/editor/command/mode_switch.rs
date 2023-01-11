@@ -14,38 +14,69 @@ use crate::{
 
 use super::CommandData;
 
-pub fn switch_to_insert_mode_before(ctx: &mut CommandData) {
-    switch_to_insert_mode_impl(ctx, false);
+#[derive(Debug, Clone, Copy)]
+enum Switch {
+    Inplace,
+    After,
+    LineStart,
+    LineEnd,
+}
+
+pub fn switch_to_insert_mode_inplace(ctx: &mut CommandData) {
+    switch_to_insert_mode_impl(ctx, Switch::Inplace);
 }
 
 pub fn switch_to_insert_mode_after(ctx: &mut CommandData) {
-    switch_to_insert_mode_impl(ctx, true);
+    switch_to_insert_mode_impl(ctx, Switch::After);
 }
 
-fn switch_to_insert_mode_impl(ctx: &mut CommandData, after: bool) {
+pub fn switch_to_insert_mode_line_start(ctx: &mut CommandData) {
+    switch_to_insert_mode_impl(ctx, Switch::LineStart);
+}
+
+pub fn switch_to_insert_mode_line_end(ctx: &mut CommandData) {
+    switch_to_insert_mode_impl(ctx, Switch::LineEnd);
+}
+
+fn switch_to_insert_mode_impl(ctx: &mut CommandData, switch: Switch) {
     let repeat = ctx.count.unwrap_or(1).max(1);
 
     let (buf, doc) = current_mut!(ctx.editor);
 
     buf.switch_mode(Mode::Insert);
 
-    doc.with_transaction(
-        TransactionAttachPolicy::Disallow,
-        buf.text_pos(),
-        |doc, tx| {
-            if after {
-                let line_char = buf.line_char();
-                let pos = line_char
-                    + nth_next_grapheme_boundary(doc.text().line(buf.line_idx()), line_char, 1);
-                buf.update_text_position(doc, pos, UpdateBufPositionParams::inserting_text());
-                tx.move_forward_by(pos);
-            }
+    let pos = buf.text_pos();
 
-            tx.set_repeat(repeat);
+    doc.with_transaction(TransactionAttachPolicy::Disallow, pos, |doc, tx| {
+        use Switch::*;
 
-            TransactionLeave::Keep
-        },
-    );
+        let line = doc.text().line(buf.line_idx());
+        let line_char = buf.line_char();
+        let line_len = line.len_chars();
+
+        let new_pos = match switch {
+            Inplace => pos,
+            LineStart => line_char,
+            After => line_char + nth_next_grapheme_boundary(line, pos - line_char, 1),
+            LineEnd => line_char + line_len,
+        };
+
+        let insert_after_cursor = matches!(switch, After | LineEnd);
+
+        let params = UpdateBufPositionParams {
+            update_saved_column: true,
+            line_keep: insert_after_cursor.then_some(LineKeep::Max),
+            allow_on_newline: insert_after_cursor,
+        };
+
+        if buf.update_text_position(doc, new_pos, params) {
+            tx.move_to(new_pos);
+        }
+
+        tx.set_repeat(repeat);
+
+        TransactionLeave::Keep
+    });
 }
 
 pub fn switch_to_normal_mode(ctx: &mut CommandData) {
@@ -79,4 +110,188 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
 
 pub fn command_mode(ctx: &mut CommandData) {
     ctx.push_widget(PromptWidget::new(':'));
+}
+
+#[cfg(test)]
+mod test {
+    use super::super::test::*;
+    use super::*;
+
+    #[test]
+    fn enter_insert_mode_transaction_opened() {
+        test_cmd(0, "", switch_to_insert_mode_after, |_: B, doc: D| {
+            assert!(doc.transaction_active());
+        });
+        test_cmd(0, "", switch_to_insert_mode_inplace, |_: B, doc: D| {
+            assert!(doc.transaction_active());
+        });
+        test_cmd(0, "", switch_to_insert_mode_line_end, |_: B, doc: D| {
+            assert!(doc.transaction_active());
+        });
+        test_cmd(0, "", switch_to_insert_mode_line_start, |_: B, doc: D| {
+            assert!(doc.transaction_active());
+        });
+    }
+
+    #[test]
+    fn enter_insert_mode_after_position() {
+        let text = "012\n4567\n9AB\n";
+
+        test_cmd(0, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 1);
+        });
+        test_cmd(1, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 2);
+        });
+        test_cmd(2, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 3);
+        });
+
+        test_cmd(4, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 5);
+        });
+        test_cmd(5, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 6);
+        });
+        test_cmd(6, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 7);
+        });
+        test_cmd(7, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 8);
+        });
+
+        test_cmd(9, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 10);
+        });
+        test_cmd(10, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 11);
+        });
+        test_cmd(11, text, switch_to_insert_mode_after, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 12);
+        });
+    }
+
+    #[test]
+    fn enter_insert_mode_inplace_position() {
+        let text = "012\n4567\n9AB\n";
+
+        test_cmd(0, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 0);
+        });
+        test_cmd(1, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 1);
+        });
+        test_cmd(2, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 2);
+        });
+
+        test_cmd(4, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 4);
+        });
+        test_cmd(5, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 5);
+        });
+        test_cmd(6, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 6);
+        });
+        test_cmd(7, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 7);
+        });
+
+        test_cmd(9, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 9);
+        });
+        test_cmd(10, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 10);
+        });
+        test_cmd(11, text, switch_to_insert_mode_inplace, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 11);
+        });
+    }
+
+    #[test]
+    fn enter_insert_mode_line_start_position() {
+        let text = "012\n4567\n9AB\n";
+
+        test_cmd(0, text, switch_to_insert_mode_line_start, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 0);
+        });
+        test_cmd(1, text, switch_to_insert_mode_line_start, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 0);
+        });
+        test_cmd(2, text, switch_to_insert_mode_line_start, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 0);
+        });
+
+        test_cmd(4, text, switch_to_insert_mode_line_start, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 4);
+        });
+        test_cmd(5, text, switch_to_insert_mode_line_start, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 4);
+        });
+        test_cmd(6, text, switch_to_insert_mode_line_start, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 4);
+        });
+        test_cmd(7, text, switch_to_insert_mode_line_start, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 4);
+        });
+
+        test_cmd(9, text, switch_to_insert_mode_line_start, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 9);
+        });
+        test_cmd(
+            10,
+            text,
+            switch_to_insert_mode_line_start,
+            |buf: B, _: D| {
+                assert_eq!(buf.text_pos(), 9);
+            },
+        );
+        test_cmd(
+            11,
+            text,
+            switch_to_insert_mode_line_start,
+            |buf: B, _: D| {
+                assert_eq!(buf.text_pos(), 9);
+            },
+        );
+    }
+
+    #[test]
+    fn enter_insert_mode_line_end_position() {
+        let text = "012\n4567\n9AB\n";
+
+        test_cmd(0, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 3);
+        });
+        test_cmd(1, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 3);
+        });
+        test_cmd(2, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 3);
+        });
+
+        test_cmd(4, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 8);
+        });
+        test_cmd(5, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 8);
+        });
+        test_cmd(6, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 8);
+        });
+        test_cmd(7, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 8);
+        });
+
+        test_cmd(9, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 12);
+        });
+        test_cmd(10, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 12);
+        });
+        test_cmd(11, text, switch_to_insert_mode_line_end, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 12);
+        });
+    }
 }

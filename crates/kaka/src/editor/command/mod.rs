@@ -72,3 +72,49 @@ macro_rules! command {
         Command::new(name, $fun)
     }};
 }
+
+#[cfg(test)]
+pub mod test {
+    use super::*;
+
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    use kaka_core::{document::Document, ropey::Rope};
+
+    use crate::{
+        current,
+        editor::{Buffer, Editor},
+    };
+
+    // to save characters typed :P
+    pub type B<'a> = &'a Buffer;
+    pub type D<'a> = &'a Document;
+
+    pub fn test_cmd<C: FnOnce(&Buffer, &Document)>(
+        start_position: usize,
+        text: impl AsRef<str>,
+        command: fn(&mut CommandData),
+        check: C,
+    ) {
+        let mut editor = Editor::init();
+
+        let mut document = Document::new_scratch();
+        *document.text_mut() = Rope::from(text.as_ref());
+
+        let buffer = Buffer::new_text(start_position, &document).unwrap();
+
+        editor.add_buffer_and_document(buffer, document, true);
+
+        let mut data = CommandData {
+            editor: &mut editor,
+            trigger: KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
+            count: Some(1),
+            callback: None,
+        };
+
+        command(&mut data);
+
+        let (buf, doc) = current!(data.editor);
+
+        check(buf, doc);
+    }
+}

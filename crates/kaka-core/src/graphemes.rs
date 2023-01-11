@@ -33,6 +33,10 @@ pub fn grapheme_width(g: &str) -> usize {
 
 #[must_use]
 pub fn nth_prev_grapheme_boundary(slice: RopeSlice, char_idx: usize, n: usize) -> usize {
+    if n == 0 {
+        return char_idx;
+    }
+
     // Bounds check
     debug_assert!(char_idx <= slice.len_chars());
 
@@ -81,6 +85,10 @@ pub fn prev_grapheme_boundary(slice: RopeSlice, char_idx: usize) -> usize {
 
 #[must_use]
 pub fn nth_next_grapheme_boundary(slice: RopeSlice, char_idx: usize, n: usize) -> usize {
+    if n == 0 {
+        return char_idx;
+    }
+
     // Bounds check
     debug_assert!(char_idx <= slice.len_chars());
 

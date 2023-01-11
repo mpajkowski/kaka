@@ -128,133 +128,206 @@ fn goto_line_impl(ctx: &mut CommandData, goto_line: GotoLine) {
 
 #[cfg(test)]
 mod test {
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use kaka_core::ropey::Rope;
-
-    use crate::{
-        current,
-        editor::{Buffer, Editor},
-    };
-
+    use super::super::test::*;
     use super::*;
 
-    #[track_caller]
-    fn test_cmd<B: FnOnce(&Buffer) -> bool>(
-        start_position: usize,
-        text: impl AsRef<str>,
-        command: fn(&mut CommandData),
-        checks_buffer: impl IntoIterator<Item = B>,
-    ) {
-        let mut editor = Editor::init();
-
-        let mut document = Document::new_scratch();
-        *document.text_mut() = Rope::from(text.as_ref());
-
-        let buffer = Buffer::new_text(start_position, &document).unwrap();
-
-        editor.add_buffer_and_document(buffer, document, true);
-
-        let mut data = CommandData {
-            editor: &mut editor,
-            trigger: KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
-            count: Some(1),
-            callback: None,
-        };
-
-        command(&mut data);
-
-        let (buf, _) = current!(data.editor);
-
-        for check in checks_buffer {
-            assert!(check(buf), "Buffer assert failed: {buf:#?}");
-        }
-    }
-
-    // to save characters :P
-    type B<'a> = &'a Buffer;
-
     #[test]
-    #[rustfmt::skip]
     fn move_left_prevented_on_pos_0() {
-        test_cmd(0, "kakaka\n", move_left, [|buf: B| buf.text_pos() == 0, |buf: B| buf.saved_column() == 0]);
-        test_cmd(7, "kakaka\nkaka", move_left, [|buf: B| buf.text_pos() == 7]);
+        test_cmd(0, "kakaka\n", move_left, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 0);
+            assert_eq!(buf.text_pos(), 0);
+        });
+
+        test_cmd(7, "kakaka\nkaka", move_left, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 7);
+        });
     }
 
     #[test]
-    #[rustfmt::skip]
     fn move_left_doable_until_newline() {
-        test_cmd(3, "kaka\n", move_left, [|buf: B| buf.text_pos() == 2, |buf: B| buf.saved_column() == 2]);
-        test_cmd(2, "kaka\n", move_left, [|buf: B| buf.text_pos() == 1, |buf: B| buf.saved_column() == 1]);
-        test_cmd(1, "kaka\n", move_left, [|buf: B| buf.text_pos() == 0, |buf: B| buf.saved_column() == 0]);
+        test_cmd(3, "kaka\n", move_left, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 2);
+            assert_eq!(buf.saved_column(), 2,);
+        });
+
+        test_cmd(2, "kaka\n", move_left, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 1);
+            assert_eq!(buf.saved_column(), 1);
+        });
+
+        test_cmd(1, "kaka\n", move_left, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 0);
+            assert_eq!(buf.saved_column(), 0);
+        });
     }
 
     #[test]
-    #[rustfmt::skip]
     fn move_right_doable_until_newline() {
-        test_cmd(0, "kaka\n", move_right, [|buf: B| buf.text_pos() == 1, |buf: B| buf.saved_column() == 1]);
-        test_cmd(1, "kaka\n", move_right, [|buf: B| buf.text_pos() == 2, |buf: B| buf.saved_column() == 2]);
-        test_cmd(2, "kaka\n", move_right, [|buf: B| buf.text_pos() == 3, |buf: B| buf.saved_column() == 3]);
-        test_cmd(3, "kaka", move_right, [|buf: B| buf.text_pos() == 3, |buf: B| buf.saved_column() == 3]);
-        test_cmd(3, "kaka\n", move_right, [|buf: B| buf.text_pos() == 3, |buf: B| buf.saved_column() == 3]);
-        test_cmd(5, "kaka\nkaka", move_right, [|buf: B| buf.text_pos() == 6, |buf: B| buf.saved_column() == 1]);
-        test_cmd(6, "kaka\nkaka", move_right, [|buf: B| buf.text_pos() == 7, |buf: B| buf.saved_column() == 2]);
-        test_cmd(7, "kaka\nkaka", move_right, [|buf: B| buf.text_pos() == 8, |buf: B| buf.saved_column() == 3]);
-        test_cmd(7, "kaka\nkaka\n", move_right, [|buf: B| buf.text_pos() == 8, |buf: B| buf.saved_column() == 3]);
+        test_cmd(0, "kaka\n", move_right, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 1);
+            assert_eq!(buf.saved_column(), 1);
+        });
+        test_cmd(1, "kaka\n", move_right, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 2);
+            assert_eq!(buf.saved_column(), 2);
+        });
+        test_cmd(2, "kaka\n", move_right, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 3);
+            assert_eq!(buf.saved_column(), 3);
+        });
+
+        test_cmd(3, "kaka", move_right, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 3);
+            assert_eq!(buf.saved_column(), 3);
+        });
+        test_cmd(3, "kaka\n", move_right, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 3);
+            assert_eq!(buf.saved_column(), 3);
+        });
+        test_cmd(5, "kaka\nkaka", move_right, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 6);
+            assert_eq!(buf.saved_column(), 1);
+        });
+        test_cmd(6, "kaka\nkaka", move_right, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 7);
+            assert_eq!(buf.saved_column(), 2);
+        });
+        test_cmd(7, "kaka\nkaka", move_right, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 8);
+            assert_eq!(buf.saved_column(), 3);
+        });
+        test_cmd(7, "kaka\nkaka\n", move_right, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 8);
+            assert_eq!(buf.saved_column(), 3);
+        });
     }
 
     #[test]
-    #[rustfmt::skip]
     fn move_down_simple() {
         let text = "012\n456\n890";
-        test_cmd(0, text, move_down, [|buf: B| buf.text_pos() == 4]);
-        test_cmd(4, text, move_down, [|buf: B| buf.text_pos() == 8]);
-        test_cmd(8, text, move_down, [|buf: B| buf.text_pos() == 8]);
+        test_cmd(0, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 4);
+        });
+        test_cmd(4, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 8);
+        });
+        test_cmd(8, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 8);
+        });
 
-        test_cmd(1, text, move_down, [|buf: B| buf.text_pos() == 5]);
-        test_cmd(5, text, move_down, [|buf: B| buf.text_pos() == 9]);
-        test_cmd(5, text, move_down, [|buf: B| buf.text_pos() == 9]);
+        test_cmd(1, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 5);
+        });
+        test_cmd(5, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 9);
+        });
+        test_cmd(5, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 9);
+        });
 
-        test_cmd(2, text, move_down, [|buf: B| buf.text_pos() == 6]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_pos() == 10]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_pos() == 10]);
+        test_cmd(2, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 6);
+        });
+        test_cmd(6, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 10);
+        });
+        test_cmd(6, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 10);
+        });
     }
 
     #[test]
-    #[rustfmt::skip]
     fn move_up_simple() {
         let text = "012\n456\n890";
-        test_cmd(0, text, move_up, [|buf: B| buf.text_pos() == 0]);
-        test_cmd(1, text, move_up, [|buf: B| buf.text_pos() == 1]);
-        test_cmd(2, text, move_up, [|buf: B| buf.text_pos() == 2]);
+        test_cmd(0, text, move_up, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 0);
+        });
+        test_cmd(1, text, move_up, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 1);
+        });
+        test_cmd(2, text, move_up, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 2);
+        });
 
-        test_cmd(4, text, move_up, [|buf: B| buf.text_pos() == 0]);
-        test_cmd(5, text, move_up, [|buf: B| buf.text_pos() == 1]);
-        test_cmd(6, text, move_up, [|buf: B| buf.text_pos() == 2]);
+        test_cmd(4, text, move_up, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 0);
+        });
+        test_cmd(5, text, move_up, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 1);
+        });
+        test_cmd(6, text, move_up, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 2);
+        });
 
-        test_cmd(8, text, move_up, [|buf: B| buf.text_pos() == 4]);
-        test_cmd(9, text, move_up, [|buf: B| buf.text_pos() == 5]);
-        test_cmd(10, text, move_up, [|buf: B| buf.text_pos() == 6]);
+        test_cmd(8, text, move_up, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 4);
+        });
+        test_cmd(9, text, move_up, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 5);
+        });
+        test_cmd(10, text, move_up, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 6);
+        });
     }
 
     #[test]
-    #[rustfmt::skip]
     fn move_down_hops() {
         let text = "0123\n567\n901";
-        test_cmd(3, text, move_down, [|buf: B| buf.text_pos() == 7, |buf: B| buf.saved_column() == 3]);
-        test_cmd(5, text, move_down, [|buf: B| buf.text_pos() == 9]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_pos() == 10]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_pos() == 10]);
-        test_cmd(9, text, move_down, [|buf: B| buf.text_pos() == 9]);
-        test_cmd(10, text, move_down, [|buf: B| buf.text_pos() == 10]);
+        test_cmd(3, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 7);
+            assert_eq!(buf.saved_column(), 3);
+        });
+
+        test_cmd(5, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 9);
+        });
+
+        test_cmd(6, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 10);
+        });
+        test_cmd(6, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 10);
+        });
+        test_cmd(9, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 9);
+        });
+        test_cmd(10, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 10);
+        });
+
         let text = "0123\n567\n901\n\n\n";
-        test_cmd(3, text, move_down, [|buf: B| buf.text_pos() == 7, |buf: B| buf.saved_column() == 3]);
-        test_cmd(5, text, move_down, [|buf: B| buf.text_pos() == 9]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_pos() == 10]);
-        test_cmd(6, text, move_down, [|buf: B| buf.text_pos() == 10]);
-        test_cmd(9, text, move_down, [|buf: B| buf.text_pos() == 13]);
-        test_cmd(10, text, move_down, [|buf: B| buf.text_pos() == 13]);
-        test_cmd(11, text, move_down, [|buf: B| buf.text_pos() == 13]);
-        test_cmd(13, text, move_down, [|buf: B| buf.text_pos() == 14]);
-        test_cmd(14, text, move_down, [|buf: B| buf.text_pos() == 15]);
+        test_cmd(3, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 7);
+            assert_eq!(buf.saved_column(), 3);
+        });
+        test_cmd(5, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 9);
+        });
+        test_cmd(6, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 10);
+        });
+        test_cmd(6, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 10);
+        });
+
+        test_cmd(9, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 13);
+        });
+
+        test_cmd(10, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 13);
+        });
+
+        test_cmd(11, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 13);
+        });
+
+        test_cmd(13, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 14);
+        });
+
+        test_cmd(14, text, move_down, |buf: B, _: D| {
+            assert_eq!(buf.text_pos(), 15);
+        });
     }
 }

@@ -128,6 +128,10 @@ impl Document {
         Ok(())
     }
 
+    pub const fn transaction_active(&self) -> bool {
+        self.tx_context.is_some()
+    }
+
     #[track_caller]
     pub fn with_transaction<F>(
         &mut self,
