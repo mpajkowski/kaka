@@ -54,7 +54,7 @@ fn switch_to_insert_mode_impl(ctx: &mut CommandData, switch: Switch) {
         let line_char = buf.line_char();
         let line_len = line.len_chars();
 
-        let new_pos = match switch {
+        let approx_new_pos = match switch {
             Inplace => pos,
             LineStart => line_char,
             After => line_char + nth_next_grapheme_boundary(line, pos - line_char, 1),
@@ -69,8 +69,9 @@ fn switch_to_insert_mode_impl(ctx: &mut CommandData, switch: Switch) {
             allow_on_newline: insert_after_cursor,
         };
 
-        if buf.update_text_position(doc, new_pos, params) {
-            tx.move_to(new_pos);
+        if buf.update_text_position(doc, approx_new_pos, params) {
+            let pos = buf.text_pos();
+            tx.move_to(pos);
         }
 
         tx.set_repeat(repeat);
