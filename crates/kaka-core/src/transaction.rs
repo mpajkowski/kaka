@@ -1,9 +1,8 @@
 use std::{borrow::Cow, cmp::Ordering, num::NonZeroUsize};
 
 use ropey::Rope;
-use smartstring::LazyCompact;
 
-pub type SmartString = smartstring::SmartString<LazyCompact>;
+use crate::SmartString;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {

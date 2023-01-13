@@ -1,3 +1,9 @@
+mod editor;
+mod prompt;
+
+pub use editor::EditorWidget;
+pub use prompt::PromptWidget;
+
 use std::any::Any;
 
 use crossterm::event::Event;

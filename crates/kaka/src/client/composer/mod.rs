@@ -1,13 +1,12 @@
-mod editor;
 mod layouter;
-mod prompt;
 mod widget;
 
 use std::{any::TypeId, fmt};
 
 use crossterm::event::Event;
-pub use editor::EditorWidget;
-pub use prompt::PromptWidget;
+
+pub use widget::EditorWidget;
+pub use widget::PromptWidget;
 
 use kaka_core::shapes::{Point, Rect};
 
