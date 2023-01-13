@@ -1,35 +1,38 @@
 use crossterm::event::Event;
-use kaka_core::shapes::{Point, Rect};
+use kaka_core::{
+    shapes::{Point, Rect},
+    SmartString,
+};
 
 use crate::client::{
+    composer::layouter,
     style::{Color, Style},
     surface::Surface,
 };
 
-use super::{layouter, widget::Widget, Context, EventOutcome};
+use super::{Context, EventOutcome, Widget};
 
 pub struct PromptWidget {
-    char: char,
-    line: String,
+    buffer: SmartString,
 }
 
 impl PromptWidget {
-    pub const fn new(char: char) -> Self {
-        Self {
-            char,
-            line: String::new(),
-        }
+    pub fn new(char: char) -> Self {
+        let mut buffer = SmartString::new_const();
+        buffer.push(char);
+
+        Self { buffer }
     }
 }
 
 impl Widget for PromptWidget {
     fn draw(&self, area: Rect, surface: &mut Surface, _ctx: &Context<'_>) {
-        let line = area.height.saturating_sub(1);
+        let line = area.y;
         let width = area.width;
 
         surface.set_stringn(
             Point::new(0, line),
-            format!("{}{}", self.char, self.line),
+            &self.buffer,
             width as usize,
             Style::default().fg(Color::Red),
         );
@@ -43,7 +46,7 @@ impl Widget for PromptWidget {
     ) -> super::EventOutcome {
         if let Event::Key(k) = event {
             if let crossterm::event::KeyCode::Char(c) = k.code {
-                self.line.push(c);
+                self.buffer.push(c);
                 EventOutcome::consumed()
             } else {
                 EventOutcome::consumed().callback(|c| c.remove_widget::<Self>())

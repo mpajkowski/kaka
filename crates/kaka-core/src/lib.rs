@@ -14,3 +14,5 @@ pub mod transaction;
 
 // re-export ropey
 pub use ropey;
+
+pub type SmartString = smartstring::SmartString<smartstring::LazyCompact>;

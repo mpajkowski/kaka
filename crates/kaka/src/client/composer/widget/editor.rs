@@ -1,9 +1,10 @@
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use kaka_core::shapes::{Point, Rect};
 
-use super::{layouter, widget::Widget, Context, Cursor, EventOutcome, EventResult};
+use super::{Context, Cursor, EventOutcome, Widget};
 use crate::{
     client::{
+        composer::{layouter, EventResult},
         style::{Color, CursorKind, Style},
         surface::Surface,
     },
