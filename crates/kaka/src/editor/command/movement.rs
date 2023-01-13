@@ -5,10 +5,7 @@ use kaka_core::{
 
 use crate::{
     current_mut,
-    editor::{
-        buffer::{LineKeep, UpdateBufPositionParams},
-        Buffer,
-    },
+    editor::{buffer::UpdateBufPositionParams, Buffer},
 };
 
 use super::CommandData;
@@ -24,7 +21,7 @@ pub fn move_left(ctx: &mut CommandData) {
         doc,
         new_pos,
         UpdateBufPositionParams {
-            line_keep: Some(LineKeep::Min),
+            line_keep: true,
             allow_on_newline: false,
             ..Default::default()
         },
@@ -48,7 +45,7 @@ pub fn move_right(ctx: &mut CommandData) {
         doc,
         new_pos,
         UpdateBufPositionParams {
-            line_keep: Some(LineKeep::Max),
+            line_keep: true,
             allow_on_newline: false,
             ..Default::default()
         },
@@ -121,7 +118,7 @@ fn goto_line_impl(ctx: &mut CommandData, goto_line: GotoLine) {
         UpdateBufPositionParams {
             update_saved_column: false,
             allow_on_newline: false,
-            line_keep: None,
+            line_keep: false,
         },
     );
 }

@@ -1,48 +1,58 @@
-use kaka_core::document::{TransactionAttachPolicy, TransactionLeave};
+use kaka_core::document::TransactionLeave;
 
-use crate::current_mut;
+use crate::{current_mut, editor::buffer::UpdateBufPositionParams};
 
 use super::CommandData;
 
 pub fn delete_line(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
-    let text = doc.text_mut();
-    let pos = buf.text_pos();
+    let text = doc.text();
+    let line_start = buf.line_char();
+    let line_end = text.line_to_char(buf.line_idx() + 1);
 
-    let line_idx = text.char_to_line(pos);
-    let line_start = text.line_to_char(line_idx);
-    let line_end = text.line_to_char(line_idx + 1);
+    doc.with_new_transaction(buf.text_pos(), |doc, tx| {
+        tx.move_to(line_start);
+        tx.delete(line_end - line_start);
 
-    text.remove(line_start..line_end);
+        tx.apply(doc.text_mut());
+
+        TransactionLeave::Commit
+    });
 }
 
 pub fn remove_char(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
-    doc.with_transaction(
-        TransactionAttachPolicy::Disallow,
-        buf.text_pos(),
-        |doc, tx| {
-            let text = doc.text_mut();
+    let pos = buf.text_pos();
 
-            let current_line_idx = buf.line_idx();
-            let current_line_start = buf.line_char();
-            let current_line_end = text.line_to_char(current_line_idx + 1);
-            let pos = buf.text_pos();
+    doc.with_new_transaction(pos, |doc, tx| {
+        if matches!(
+            doc.text().line(buf.line_idx()).get_char(0),
+            Some('\n') | None
+        ) {
+            return TransactionLeave::Rollback;
+        }
 
-            if (current_line_start..current_line_end).contains(&pos)
-                && text.try_remove(pos..=pos).is_ok()
-            {
-                if pos == current_line_end.saturating_sub(2) {
-                    buf.update_text_position(doc, pos, Default::default());
-                }
+        tx.delete(1);
+        let mut tmp = doc.text().clone();
+        tx.apply(&mut tmp);
 
-                tx.delete(1);
-                return TransactionLeave::Commit;
-            }
+        if let Some(new_pos) = buf.update_text_position(
+            &tmp,
+            pos,
+            UpdateBufPositionParams {
+                line_keep: true,
+                allow_on_newline: false,
+                ..Default::default()
+            },
+        ) {
+            tx.move_to(new_pos);
+            log::info!("Pos: {}", buf.text_pos());
+        }
 
-            TransactionLeave::Rollback
-        },
-    );
+        tx.apply(doc.text_mut());
+
+        TransactionLeave::Commit
+    });
 }

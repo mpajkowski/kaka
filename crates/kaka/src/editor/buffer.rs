@@ -1,12 +1,13 @@
 use anyhow::{ensure, Context, Result};
 use kaka_core::{
-    document::{Document, DocumentId},
+    document::{AsRope, Document, DocumentId},
     graphemes::nth_next_grapheme_boundary,
 };
 
 use std::{
+    cmp::Ordering,
     num::NonZeroUsize,
-    sync::atomic::{AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize, Ordering as MemoryOrdering},
 };
 
 use super::Mode;
@@ -20,7 +21,7 @@ impl BufferId {
     pub fn next() -> Self {
         pub static IDS: AtomicUsize = AtomicUsize::new(1);
 
-        let next = NonZeroUsize::new(IDS.fetch_add(1, Ordering::SeqCst))
+        let next = NonZeroUsize::new(IDS.fetch_add(1, MemoryOrdering::SeqCst))
             .expect("BufferId counter overflowed");
 
         Self(next)
@@ -143,14 +144,14 @@ impl Buffer {
 
     pub fn update_text_position(
         &mut self,
-        doc: &Document,
-        mut pos: usize,
+        rope: &impl AsRope,
+        pos: usize,
         params: UpdateBufPositionParams,
-    ) -> bool {
-        let text = doc.text();
+    ) -> Option<usize> {
+        let text = rope.as_rope();
 
-        if pos == self.text_pos || pos > text.len_chars() {
-            return false;
+        if pos > text.len_chars() {
+            return None;
         }
 
         let UpdateBufPositionParams {
@@ -161,22 +162,24 @@ impl Buffer {
 
         let mut line_idx = text.char_to_line(pos);
 
-        if let Some(line_keep) = line_keep {
-            if line_idx != self.line_idx {
-                match line_keep {
-                    LineKeep::Max => {
-                        let next_line_idx =
-                            (self.line_idx + 1).min(text.len_lines().saturating_sub(1));
-                        let next_line_char = text.line_to_char(next_line_idx);
-                        pos = next_line_char - 1;
-                    }
-                    LineKeep::Min => {
-                        pos = self.line_char;
-                    }
-                }
+        let mut new_pos = pos;
 
-                line_idx = self.line_idx;
-            }
+        if line_keep {
+            match line_idx.cmp(&self.line_idx) {
+                Ordering::Less => {
+                    new_pos = self.line_char;
+                }
+                Ordering::Greater => {
+                    let next_line_idx = (self.line_idx + 1).min(text.len_lines().saturating_sub(1));
+                    let next_line_char = text.line_to_char(next_line_idx);
+                    new_pos = next_line_char - 1;
+                }
+                Ordering::Equal => {}
+            };
+
+            line_idx = self.line_idx;
+
+            debug_assert_eq!(line_idx, text.char_to_line(new_pos), "line changed");
         }
 
         if line_idx != self.line_idx {
@@ -187,13 +190,13 @@ impl Buffer {
 
         if !allow_on_newline
             && line.len_chars() > 1
-            && matches!(text.get_char(pos), None | Some('\n'))
+            && matches!(text.get_char(new_pos), None | Some('\n'))
         {
-            pos -= 1;
+            new_pos -= 1;
         }
 
         self.line_idx = line_idx;
-        self.text_pos = pos;
+        self.text_pos = new_pos;
 
         if update_saved_column {
             let distance = self.text_pos - self.line_char;
@@ -201,7 +204,7 @@ impl Buffer {
             self.saved_column = nth_next_grapheme_boundary(line, 0, distance);
         }
 
-        true
+        (self.text_pos != pos).then_some(new_pos)
     }
 
     fn set_mode_impl(&mut self, mode: Mode) -> Result<()> {
@@ -222,7 +225,7 @@ pub struct UpdateBufPositionParams {
     /// Update saved column
     pub update_saved_column: bool,
     /// Keep position in line bounds
-    pub line_keep: Option<LineKeep>,
+    pub line_keep: bool,
     /// Allow placing position on trailing \n character
     pub allow_on_newline: bool,
 }
@@ -231,7 +234,7 @@ impl Default for UpdateBufPositionParams {
     fn default() -> Self {
         Self {
             update_saved_column: true,
-            line_keep: None,
+            line_keep: false,
             allow_on_newline: false,
         }
     }
@@ -241,16 +244,10 @@ impl UpdateBufPositionParams {
     pub const fn inserting_text() -> Self {
         Self {
             update_saved_column: true,
-            line_keep: None,
+            line_keep: false,
             allow_on_newline: true,
         }
     }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum LineKeep {
-    Max,
-    Min,
 }
 
 #[cfg(test)]
