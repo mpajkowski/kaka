@@ -1,5 +1,5 @@
 use crossterm::event::{KeyCode, KeyEvent};
-use kaka_core::document::{TransactionAttachPolicy, TransactionLeave};
+use kaka_core::{document::TransactionLeave, transaction::Transaction};
 
 use crate::{
     current_mut,
@@ -13,53 +13,43 @@ pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
 
     debug_assert!(matches!(buf.mode(), Mode::Insert));
 
-    let mut pos = buf.text_pos();
-    doc.with_transaction(
-        TransactionAttachPolicy::RequireTransactionAlive,
-        pos,
-        |doc, tx| {
-            let text = doc.text_mut();
+    doc.with_transaction(|doc, insert_tx| {
+        let text = doc.text_mut();
 
-            match event.code {
-                KeyCode::Char(c) => {
-                    text.insert_char(pos, c);
-                    tx.insert_char(c);
+        let pos = buf.text_pos();
+        let mut tx = Transaction::new(text, pos);
 
-                    pos += 1;
+        match event.code {
+            KeyCode::Char(c) => {
+                tx.insert_char(c);
+            }
+            KeyCode::Backspace => {
+                if pos > 0 {
+                    tx.move_backward_by(1);
+                    tx.delete(1);
                 }
-                KeyCode::Backspace => {
-                    if pos > 0 {
-                        text.remove(pos - 1..pos);
-
-                        tx.move_backward_by(1);
-                        tx.delete(1);
-                        pos -= 1;
-                    }
+            }
+            KeyCode::Enter => {
+                tx.insert_char('\n');
+            }
+            KeyCode::Left => {
+                if pos > 0 {
+                    tx.move_backward_by(1);
                 }
-                KeyCode::Enter => {
-                    text.insert_char(pos, '\n');
-                    tx.insert_char('\n');
-
-                    pos += 1;
+            }
+            KeyCode::Right => {
+                if pos < text.len_chars() - 1 {
+                    tx.move_forward_by(1);
                 }
-                KeyCode::Left => {
-                    if pos > 0 {
-                        tx.move_backward_by(1);
-                        pos -= 1;
-                    }
-                }
-                KeyCode::Right => {
-                    if pos < text.len_chars() - 1 {
-                        pos += 1;
-                        tx.move_forward_by(1);
-                    }
-                }
-                _ => { /* TODO */ }
-            };
+            }
+            _ => { /* TODO */ }
+        };
 
-            buf.update_text_position(doc, pos, UpdateBufPositionParams::inserting_text());
+        let pos = tx.apply(text);
+        buf.update_text_position(doc, pos, UpdateBufPositionParams::inserting_text());
 
-            TransactionLeave::Keep
-        },
-    );
+        insert_tx.merge(tx);
+
+        TransactionLeave::Keep
+    });
 }

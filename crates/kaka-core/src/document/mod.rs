@@ -132,39 +132,46 @@ impl Document {
         self.tx_context.is_some()
     }
 
-    #[track_caller]
-    pub fn with_transaction<F>(
-        &mut self,
-        attach: TransactionAttachPolicy,
-        pos: usize,
-        mut callback: F,
-    ) where
+    pub fn open_transaction(&mut self, pos: usize) {
+        if let Some(ctx) = self.tx_context.as_mut() {
+            ctx.transaction.move_to(pos);
+        } else {
+            let saved_text = self.text.clone();
+            self.tx_context = Some(TransactionContext {
+                transaction: Transaction::new(&saved_text, pos),
+                saved_text,
+            });
+        }
+    }
+
+    pub fn with_new_transaction<F>(&mut self, pos: usize, callback: F)
+    where
         F: FnMut(&mut Self, &mut Transaction) -> TransactionLeave,
     {
-        // validate attach policy requirements
-        match attach {
-            TransactionAttachPolicy::RequireTransactionAlive => {
-                assert!(self.tx_context.is_some());
-            }
-            TransactionAttachPolicy::Disallow => assert!(self.tx_context.is_none()),
-            TransactionAttachPolicy::Allow => {}
-        };
+        assert!(self.tx_context.is_none());
+
+        let saved_text = self.text.clone();
+        self.tx_context = Some(TransactionContext {
+            transaction: Transaction::new(&saved_text, pos),
+            saved_text,
+        });
+
+        self.with_transaction(callback);
+    }
+
+    #[track_caller]
+    pub fn with_transaction<F>(&mut self, mut callback: F)
+    where
+        F: FnMut(&mut Self, &mut Transaction) -> TransactionLeave,
+    {
+        assert!(self.tx_context.is_some());
 
         // restore or create transaction context
-        let tx_context = self.tx_context.take().unwrap_or_else(|| {
-            let tx = Transaction::new(&self.text, pos);
-
-            TransactionContext {
-                transaction: tx,
-                saved_text: self.text.clone(),
-                start_pos: pos,
-            }
-        });
+        let tx_context = self.tx_context.take().unwrap();
 
         let TransactionContext {
             mut transaction,
             saved_text,
-            start_pos,
         } = tx_context;
 
         match callback(self, &mut transaction) {
@@ -175,7 +182,6 @@ impl Document {
                 self.tx_context = Some(TransactionContext {
                     transaction,
                     saved_text,
-                    start_pos,
                 });
             }
             TransactionLeave::Rollback => {
@@ -199,20 +205,6 @@ pub struct FilesystemMetadata {
     writable: bool,
 }
 
-#[derive(Debug)]
-pub enum TransactionAttachPolicy {
-    /// Require alive transaction on attach. Suitable for actions
-    /// that don't finish on one command dispatch cycle
-    RequireTransactionAlive,
-
-    /// Allow subscribing to alive transaction. Suitable for actions
-    /// like LSP textEdit
-    Allow,
-
-    /// Disallow subscribing to alive transaction
-    Disallow,
-}
-
 /// Descibes what to do with transaction on scope exit
 #[derive(Debug)]
 pub enum TransactionLeave {
@@ -230,5 +222,29 @@ pub enum TransactionLeave {
 struct TransactionContext {
     transaction: Transaction,
     saved_text: Rope,
-    start_pos: usize,
+}
+
+pub trait AsRope {
+    fn as_rope(&self) -> &Rope;
+    fn as_rope_mut(&mut self) -> &mut Rope;
+}
+
+impl AsRope for Rope {
+    fn as_rope(&self) -> &Rope {
+        self
+    }
+
+    fn as_rope_mut(&mut self) -> &mut Rope {
+        self
+    }
+}
+
+impl AsRope for Document {
+    fn as_rope(&self) -> &Rope {
+        self.text()
+    }
+
+    fn as_rope_mut(&mut self) -> &mut Rope {
+        self.text_mut()
+    }
 }

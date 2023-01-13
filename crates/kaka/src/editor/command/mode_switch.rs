@@ -1,15 +1,9 @@
-use kaka_core::{
-    document::{TransactionAttachPolicy, TransactionLeave},
-    graphemes::nth_next_grapheme_boundary,
-};
+use kaka_core::{document::TransactionLeave, graphemes::nth_next_grapheme_boundary};
 
 use crate::{
     client::composer::PromptWidget,
     current_mut,
-    editor::{
-        buffer::{LineKeep, UpdateBufPositionParams},
-        Mode,
-    },
+    editor::{buffer::UpdateBufPositionParams, Mode},
 };
 
 use super::CommandData;
@@ -39,6 +33,7 @@ pub fn switch_to_insert_mode_line_end(ctx: &mut CommandData) {
 }
 
 fn switch_to_insert_mode_impl(ctx: &mut CommandData, switch: Switch) {
+    use Switch::*;
     let repeat = ctx.count.unwrap_or(1).max(1);
 
     let (buf, doc) = current_mut!(ctx.editor);
@@ -47,35 +42,32 @@ fn switch_to_insert_mode_impl(ctx: &mut CommandData, switch: Switch) {
 
     let pos = buf.text_pos();
 
-    doc.with_transaction(TransactionAttachPolicy::Disallow, pos, |doc, tx| {
-        use Switch::*;
+    let line = doc.text().line(buf.line_idx());
+    let line_char = buf.line_char();
+    let line_len = line.len_chars();
 
-        let line = doc.text().line(buf.line_idx());
-        let line_char = buf.line_char();
-        let line_len = line.len_chars();
+    let approx_new_pos = match switch {
+        Inplace => pos,
+        LineStart => line_char,
+        After => line_char + nth_next_grapheme_boundary(line, pos - line_char, 1),
+        LineEnd => line_char + line_len,
+    };
 
-        let approx_new_pos = match switch {
-            Inplace => pos,
-            LineStart => line_char,
-            After => line_char + nth_next_grapheme_boundary(line, pos - line_char, 1),
-            LineEnd => line_char + line_len,
-        };
+    let insert_after_cursor = matches!(switch, After | LineEnd);
 
-        let insert_after_cursor = matches!(switch, After | LineEnd);
+    let params = UpdateBufPositionParams {
+        update_saved_column: true,
+        line_keep: insert_after_cursor,
+        allow_on_newline: insert_after_cursor,
+    };
 
-        let params = UpdateBufPositionParams {
-            update_saved_column: true,
-            line_keep: insert_after_cursor.then_some(LineKeep::Max),
-            allow_on_newline: insert_after_cursor,
-        };
+    let pos = buf
+        .update_text_position(doc, approx_new_pos, params)
+        .unwrap_or(approx_new_pos);
 
-        if buf.update_text_position(doc, approx_new_pos, params) {
-            let pos = buf.text_pos();
-            tx.move_to(pos);
-        }
-
+    doc.open_transaction(pos);
+    doc.with_transaction(|_, tx| {
         tx.set_repeat(repeat);
-
         TransactionLeave::Keep
     });
 }
@@ -92,20 +84,16 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
             doc,
             buf.text_pos().saturating_sub(1),
             UpdateBufPositionParams {
-                line_keep: Some(LineKeep::Min),
+                line_keep: true,
                 ..Default::default()
             },
         );
 
-        doc.with_transaction(
-            TransactionAttachPolicy::RequireTransactionAlive,
-            buf.text_pos(),
-            |doc, tx| {
-                tx.apply_repeats(doc.text_mut());
+        doc.with_transaction(|doc, tx| {
+            tx.apply_repeats(doc.text_mut());
 
-                TransactionLeave::Commit
-            },
-        );
+            TransactionLeave::Commit
+        });
     }
 }
 

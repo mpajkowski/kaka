@@ -37,6 +37,19 @@ impl Transaction {
         }
     }
 
+    pub fn merge(&mut self, mut other: Self) {
+        let head = self.changeset_head();
+        let other_head = other.changesets.remove(other.changesets.len() - 1);
+
+        match other_head.start_pos.cmp(&head.start_pos) {
+            Ordering::Equal => head.changes.extend(other_head.changes),
+            Ordering::Less | Ordering::Greater => self.changesets.push(other_head),
+        }
+
+        self.changesets.extend(other.changesets);
+        self.len_after = other.len_after;
+    }
+
     pub fn replace(&mut self, ch: char) {
         self.delete(1);
         let mut buf = [0; 4];
