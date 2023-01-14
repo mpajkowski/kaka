@@ -43,7 +43,7 @@ impl Keymap {
     pub fn insert_mode(registry: &CommandRegistry) -> Self {
         let c = |name: &str| {
             registry
-                .command_by_name(name, false, true)
+                .mappable_command_by_name(name)
                 .expect("Failed to find command")
         };
 
@@ -53,7 +53,7 @@ impl Keymap {
     pub fn normal_mode(registry: &CommandRegistry) -> Self {
         let c = |name: &str| {
             registry
-                .command_by_name(name, false, true)
+                .mappable_command_by_name(name)
                 .expect("Failed to find command")
         };
 

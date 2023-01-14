@@ -46,6 +46,19 @@ pub struct Command {
     fun: CommandFn,
 }
 
+impl PartialEq for Command {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.aliases == other.aliases
+            && self.typable == other.typable
+            && self.mappable == other.mappable
+            && std::ptr::eq(
+                self.fun as *const fn(&mut CommandData),
+                other.fun as *const _,
+            )
+    }
+}
+
 impl Command {
     pub fn new(
         name: impl Into<Cow<'static, str>>,
@@ -72,11 +85,15 @@ impl Command {
     }
 
     pub const fn typable(&self) -> bool {
-        self.mappable
+        self.typable
     }
 
     pub const fn mappable(&self) -> bool {
         self.mappable
+    }
+
+    pub fn aliases(&self) -> &[Cow<'static, str>] {
+        &self.aliases
     }
 }
 

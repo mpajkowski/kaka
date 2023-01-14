@@ -25,11 +25,7 @@ pub struct Context<'a> {
 
 impl<'a> Context<'a> {
     pub fn invoke_command_by_name(&mut self, name: &str) {
-        if let Some(command) = self
-            .editor
-            .command_registry
-            .command_by_name(name, true, false)
-        {
+        if let Some(command) = self.editor.command_registry.typable_command_by_name(name) {
             let mut ctx = CommandData {
                 editor: self.editor,
                 count: None,
