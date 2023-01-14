@@ -8,7 +8,6 @@ use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 pub use buffer::{Buffer, BufferId};
-use crossterm::event::KeyEvent;
 use kaka_core::document::{Document, DocumentId};
 use kaka_core::ropey::Rope;
 use kaka_core::shapes::{Point, Rect};
@@ -19,7 +18,7 @@ use crate::client::composer::Cursor;
 use crate::client::Redraw;
 use crate::current;
 
-pub use self::command::{insert_mode_on_key, Command, CommandData};
+pub use self::command::{insert_mode_on_key, Command, CommandData, CommandRegistry};
 pub use self::keymap::Keymaps;
 
 /// Holds editor state
@@ -27,25 +26,27 @@ pub struct Editor {
     pub buffers: BTreeMap<BufferId, Buffer>,
     pub documents: HashMap<DocumentId, Document>,
     pub current: BufferId,
-    pub buffered_keys: Vec<KeyEvent>,
     pub exit_code: Option<i32>,
     pub keymaps: Keymaps,
+    pub command_registry: CommandRegistry,
     logger: BufferId,
 }
 
 impl Editor {
     pub fn init() -> Self {
         let mut keymaps = Keymaps::default();
-        keymaps.register_keymap_for_mode(&Mode::Insert, Keymap::insert_mode());
-        keymaps.register_keymap_for_mode(&Mode::Normal, Keymap::normal_mode());
+        let registry = CommandRegistry::populate();
+
+        keymaps.register_keymap_for_mode(&Mode::Insert, Keymap::insert_mode(&registry));
+        keymaps.register_keymap_for_mode(&Mode::Normal, Keymap::normal_mode(&registry));
 
         Self {
             buffers: BTreeMap::new(),
             documents: HashMap::new(),
             current: BufferId::MAX,
             logger: BufferId::MAX,
-            buffered_keys: Vec::new(),
             exit_code: None,
+            command_registry: registry,
             keymaps,
         }
     }

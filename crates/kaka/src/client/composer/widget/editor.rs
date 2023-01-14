@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use crossterm::event::{Event, KeyCode, KeyEvent};
 use kaka_core::shapes::{Point, Rect};
 
@@ -74,7 +76,7 @@ impl EditorWidget {
         keymaps: &Keymaps,
         buffer: &Buffer,
         event: KeyEvent,
-    ) -> Option<Command> {
+    ) -> Option<Arc<Command>> {
         if self.insert_on {
             return None;
         }
@@ -115,7 +117,7 @@ impl EditorWidget {
             // ...and here
             KeymapTreeElement::Node(_) => self.buffered_keys.push(event),
             KeymapTreeElement::Leaf(command) => {
-                call = Some(command.clone());
+                call = Some(Arc::clone(command));
                 self.buffered_keys.clear();
             }
         }
@@ -148,12 +150,7 @@ impl Widget for EditorWidget {
         }
     }
 
-    fn handle_event(
-        &mut self,
-        area: Rect,
-        event: &Event,
-        ctx: &mut Context,
-    ) -> super::EventOutcome {
+    fn handle_event(&mut self, event: &Event, ctx: &mut Context) -> super::EventOutcome {
         let (buf, _) = current_mut!(ctx.editor);
 
         let key_event = match event {
@@ -168,27 +165,19 @@ impl Widget for EditorWidget {
 
         let mut context = editor::CommandData {
             editor: ctx.editor,
-            trigger: key_event,
             count: self.count,
             callback: None,
         };
 
         // TODO delegate to Mode?
         if let Some(command) = command {
-            log::debug!("Invoking command: {}", command.describe());
             command.call(&mut context);
             self.reset();
         } else if is_insert {
-            log::debug!("insert_mode_on_key");
             insert_mode_on_key(&mut context, key_event);
         }
 
         let callback = context.callback;
-
-        let (buf, _) = current_mut!(ctx.editor);
-        buf.update_vscroll(area.height as usize);
-
-        self.cursor = ctx.editor.cursor(area);
 
         EventOutcome {
             callback,
@@ -202,6 +191,13 @@ impl Widget for EditorWidget {
 
     fn area(&self, viewport: Rect) -> Rect {
         layouter::editor(viewport)
+    }
+
+    fn update_state(&mut self, area: Rect, ctx: &mut Context) {
+        self.cursor = ctx.editor.cursor(area);
+
+        let (buf, _) = current_mut!(ctx.editor);
+        buf.update_vscroll(area.height as _);
     }
 }
 

@@ -3,6 +3,7 @@ mod history;
 mod insert_mode;
 mod mode_switch;
 mod movement;
+pub mod registry;
 mod text_manipulation;
 
 pub use buffer_mgmt::*;
@@ -12,9 +13,9 @@ pub use mode_switch::*;
 pub use movement::*;
 pub use text_manipulation::*;
 
-use std::{borrow::Cow, fmt::Debug};
+pub use registry::Registry as CommandRegistry;
 
-use crossterm::event::KeyEvent;
+use std::{borrow::Cow, fmt::Debug};
 
 use crate::client::composer::{Callback, Widget};
 
@@ -24,13 +25,12 @@ pub type CommandFn = fn(&mut CommandData);
 
 pub struct CommandData<'a> {
     pub editor: &'a mut Editor,
-    pub trigger: KeyEvent,
     pub count: Option<usize>,
     pub callback: Option<Callback>,
 }
 
 impl<'a> CommandData<'a> {
-    fn push_widget<W: Widget + 'static>(&mut self, widget: W) {
+    pub fn push_widget<W: Widget + 'static>(&mut self, widget: W) {
         self.callback = Some(Box::new(move |composer| {
             composer.push_widget(widget);
         }));
@@ -40,14 +40,26 @@ impl<'a> CommandData<'a> {
 #[derive(Clone)]
 pub struct Command {
     name: Cow<'static, str>,
+    aliases: Vec<Cow<'static, str>>,
+    typable: bool,
+    mappable: bool,
     fun: CommandFn,
 }
 
 impl Command {
-    pub fn new(name: impl Into<Cow<'static, str>>, fun: CommandFn) -> Self {
+    pub fn new(
+        name: impl Into<Cow<'static, str>>,
+        fun: CommandFn,
+        typable: bool,
+        mappable: bool,
+        aliases: impl IntoIterator<Item = impl Into<Cow<'static, str>>>,
+    ) -> Self {
         Self {
             name: name.into(),
+            aliases: aliases.into_iter().map(|a| a.into()).collect(),
             fun,
+            mappable,
+            typable,
         }
     }
 
@@ -55,29 +67,33 @@ impl Command {
         (self.fun)(context);
     }
 
-    pub fn describe(&self) -> &str {
+    pub const fn name(&self) -> &Cow<'static, str> {
         &self.name
+    }
+
+    pub const fn typable(&self) -> bool {
+        self.mappable
+    }
+
+    pub const fn mappable(&self) -> bool {
+        self.mappable
     }
 }
 
 impl Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Command").field("name", &self.name).finish()
+        f.debug_struct("Command")
+            .field("name", &self.name)
+            .field("aliases", &self.aliases)
+            .field("fun", &(self.fun as *const CommandFn))
+            .finish()
     }
-}
-#[macro_export]
-macro_rules! command {
-    ($fun: ident) => {{
-        let name = stringify!($fun);
-        Command::new(name, $fun)
-    }};
 }
 
 #[cfg(test)]
 pub mod test {
     use super::*;
 
-    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use kaka_core::{document::Document, ropey::Rope};
 
     use crate::{
@@ -106,7 +122,6 @@ pub mod test {
 
         let mut data = CommandData {
             editor: &mut editor,
-            trigger: KeyEvent::new(KeyCode::Char('x'), KeyModifiers::NONE),
             count: Some(1),
             callback: None,
         };

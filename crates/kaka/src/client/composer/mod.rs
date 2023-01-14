@@ -10,6 +10,7 @@ pub use widget::PromptWidget;
 
 use kaka_core::shapes::{Point, Rect};
 
+use crate::editor::CommandData;
 use crate::editor::Editor;
 
 pub use self::widget::Widget;
@@ -20,6 +21,24 @@ pub type Callback = Box<dyn FnOnce(&mut Composer)>;
 
 pub struct Context<'a> {
     pub editor: &'a mut Editor,
+}
+
+impl<'a> Context<'a> {
+    pub fn invoke_command_by_name(&mut self, name: &str) {
+        if let Some(command) = self
+            .editor
+            .command_registry
+            .command_by_name(name, true, false)
+        {
+            let mut ctx = CommandData {
+                editor: self.editor,
+                count: None,
+                callback: None,
+            };
+
+            command.call(&mut ctx);
+        }
+    }
 }
 
 type Widgets = Vec<(TypeId, (Box<dyn Widget>, Rect))>;
@@ -37,7 +56,7 @@ pub struct EventOutcome {
 impl fmt::Debug for EventOutcome {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("EventOutcome")
-            .field("callback", &self.callback.as_ref().map(|_| "with callback"))
+            .field("callback", &self.callback.is_some())
             .field("result", &self.result)
             .finish()
     }
@@ -115,8 +134,8 @@ impl Composer {
 
         let mut consumed = false;
         let mut callbacks = vec![];
-        for (_, (widget, area)) in self.widgets.iter_mut().rev() {
-            let EventOutcome { callback, result } = widget.handle_event(*area, &event, ctx);
+        for (_, (widget, _)) in self.widgets.iter_mut().rev() {
+            let EventOutcome { callback, result } = widget.handle_event(&event, ctx);
             callbacks.extend(callback);
             consumed = result == EventResult::Consumed;
             if consumed {
@@ -126,6 +145,10 @@ impl Composer {
 
         for callback in callbacks {
             callback(self);
+        }
+
+        for (_, (widget, area)) in self.widgets.iter_mut() {
+            widget.update_state(*area, ctx);
         }
 
         Redraw(consumed || resized)
