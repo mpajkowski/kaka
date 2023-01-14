@@ -98,7 +98,7 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
 }
 
 pub fn command_mode(ctx: &mut CommandData) {
-    ctx.push_widget(PromptWidget::new(':', |this, ctx| {
+    ctx.push_widget(PromptWidget::new(":", |this, ctx| {
         let command_name = this.text();
         ctx.invoke_command_by_name(command_name);
     }));
