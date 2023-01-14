@@ -1,8 +1,4 @@
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    sync::{Arc, Weak},
-};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 
 use super::*;
 
@@ -21,9 +17,8 @@ macro_rules! command {
 
 #[derive(Debug, Default)]
 pub struct Registry {
-    commands: HashMap<Cow<'static, str>, Weak<Command>>,
-    typable_idx: HashMap<Cow<'static, str>, Arc<Command>>,
-    mappable_idx: HashMap<Cow<'static, str>, Arc<Command>>,
+    typable: HashMap<Cow<'static, str>, Arc<Command>>,
+    mappable: HashMap<Cow<'static, str>, Arc<Command>>,
 }
 
 impl Registry {
@@ -32,41 +27,27 @@ impl Registry {
 
         let command = Arc::new(command);
 
-        if command.typable {
-            self.typable_idx
-                .insert(command.name.clone(), Arc::clone(&command));
+        if command.typable() {
+            self.typable
+                .insert(command.name().clone(), Arc::clone(&command));
+
+            for alias in command.aliases() {
+                self.typable.insert(alias.clone(), Arc::clone(&command));
+            }
         }
 
-        if command.mappable {
-            self.mappable_idx
+        if command.mappable() {
+            self.mappable
                 .insert(command.name.clone(), Arc::clone(&command));
         }
-
-        self.commands
-            .insert(command.name().clone(), Arc::downgrade(&command));
     }
 
-    pub fn command_by_name(
-        &self,
-        name: &str,
-        typable_required: bool,
-        mappable_required: bool,
-    ) -> Option<Arc<Command>> {
-        let cmd = match (typable_required, mappable_required) {
-            (true, false) => return self.typable_idx.get(name).cloned(),
-            (false, true) => return self.mappable_idx.get(name).cloned(),
-            _ => self.commands.get(name)?.upgrade()?,
-        };
+    pub fn mappable_command_by_name(&self, name: &str) -> Option<Arc<Command>> {
+        self.mappable.get(name).cloned()
+    }
 
-        if mappable_required && !cmd.mappable() {
-            return None;
-        }
-
-        if typable_required && !cmd.typable() {
-            return None;
-        }
-
-        Some(Arc::clone(&cmd))
+    pub fn typable_command_by_name(&self, name: &str) -> Option<Arc<Command>> {
+        self.typable.get(name).cloned()
     }
 
     pub fn populate() -> Self {
@@ -102,5 +83,65 @@ impl Registry {
         }
 
         this
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn dummy(_: &mut CommandData) {}
+
+    #[test]
+    fn command_macro() {
+        let command = command!(dummy);
+
+        assert_eq!(command.name(), "dummy");
+        assert!(command.typable());
+        assert!(command.mappable());
+
+        let command = command!(dummy, true, false);
+        assert!(command.typable());
+        assert!(!command.mappable());
+
+        let command = command!(dummy, false, true);
+        assert!(!command.typable());
+        assert!(command.mappable());
+
+        let command = command!(dummy, ["x", "d"]);
+        assert_eq!(command.aliases(), &["x", "d"]);
+    }
+
+    #[test]
+    fn get_typable_command() {
+        let mut registry = Registry::default();
+        let command = command!(dummy);
+        registry.register(command.clone());
+
+        let command_ptr = registry.typable_command_by_name("dummy").unwrap();
+        assert_eq!(command, *command_ptr);
+    }
+
+    #[test]
+    fn get_mappable_command() {
+        let mut registry = Registry::default();
+        let command = command!(dummy);
+        registry.register(command.clone());
+
+        let command_ptr = registry.mappable_command_by_name("dummy").unwrap();
+        assert_eq!(command, *command_ptr);
+    }
+
+    #[test]
+    fn get_command_by_alias() {
+        let mut registry = Registry::default();
+        let command = command!(dummy, ["x", "d"]);
+        registry.register(command.clone());
+
+        let command_ptr = registry.typable_command_by_name("x").unwrap();
+        assert_eq!(command, *command_ptr);
+
+        let command_ptr = registry.typable_command_by_name("d").unwrap();
+        assert_eq!(command, *command_ptr);
     }
 }
