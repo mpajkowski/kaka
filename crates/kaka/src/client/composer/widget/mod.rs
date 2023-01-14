@@ -20,18 +20,15 @@ pub trait Widget: Any {
         true
     }
 
-    fn handle_event(
-        &mut self,
-        _area: Rect,
-        _event: &Event,
-        _context: &mut Context,
-    ) -> EventOutcome {
+    fn handle_event(&mut self, _event: &Event, _context: &mut Context) -> EventOutcome {
         EventOutcome::ignored()
     }
 
     fn cursor(&self) -> Option<Cursor> {
         None
     }
+
+    fn update_state(&mut self, _: Rect, _context: &mut Context) {}
 
     /// Probably not a good idea but ok for now
     fn area(&self, viewport: Rect) -> Rect;

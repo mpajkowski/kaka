@@ -2,7 +2,7 @@ use std::{borrow::Cow, cmp::Ordering, num::NonZeroUsize};
 
 use ropey::Rope;
 
-use crate::SmartString;
+use crate::{graphemes::nth_next_grapheme_boundary, SmartString};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Change {
@@ -239,11 +239,11 @@ impl ChangeSet {
                 }
                 Change::Insert(content) => {
                     rope.insert(pos, content);
-                    pos += content.len();
+                    pos += content.chars().count();
                 }
                 Change::Delete(len) => {
-                    let range = pos..pos + *len;
-                    rope.remove(range);
+                    let range_end = nth_next_grapheme_boundary(rope.slice(..), pos, *len);
+                    rope.remove(pos..range_end);
                 }
             }
         }
@@ -278,8 +278,10 @@ impl ChangeSet {
                     revert.delete(len);
                 }
                 Delete(len) => {
+                    let text = original.slice(..);
                     let pos = revert.end_pos;
-                    let text = Cow::from(original.slice(pos..pos + len));
+                    let range_end = nth_next_grapheme_boundary(text, pos, *len);
+                    let text = Cow::from(text.slice(pos..range_end));
                     revert.insert(text.into());
                 }
             };

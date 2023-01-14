@@ -1,13 +1,14 @@
 use std::{
     cmp::Reverse,
     collections::{hash_map::Entry, HashMap},
+    sync::Arc,
 };
 
 use anyhow::{Context, Result};
 use crossterm::event::KeyEvent;
 
 use super::{command::*, Mode};
-use crate::command;
+use registry::Registry as CommandRegistry;
 
 #[derive(Debug, Default)]
 pub struct Keymaps {
@@ -39,42 +40,54 @@ impl Keymap {
         self.0.get(&event)
     }
 
-    pub fn insert_mode() -> Self {
-        Self::with_mappings([("<ESC>", command!(switch_to_normal_mode))])
+    pub fn insert_mode(registry: &CommandRegistry) -> Self {
+        let c = |name: &str| {
+            registry
+                .command_by_name(name, false, true)
+                .expect("Failed to find command")
+        };
+
+        Self::with_mappings([("<ESC>", c("switch_to_normal_mode"))])
     }
 
-    pub fn normal_mode() -> Self {
+    pub fn normal_mode(registry: &CommandRegistry) -> Self {
+        let c = |name: &str| {
+            registry
+                .command_by_name(name, false, true)
+                .expect("Failed to find command")
+        };
+
         let mappings = [
             // mode
-            ("i", command!(switch_to_insert_mode_inplace)),
-            ("I", command!(switch_to_insert_mode_line_start)),
-            ("a", command!(switch_to_insert_mode_after)),
-            ("A", command!(switch_to_insert_mode_line_end)),
+            ("i", c("switch_to_insert_mode_inplace")),
+            ("I", c("switch_to_insert_mode_line_start")),
+            ("a", c("switch_to_insert_mode_after")),
+            ("A", c("switch_to_insert_mode_line_end")),
             // movement
-            ("h", command!(move_left)),
-            ("j", command!(move_down)),
-            ("k", command!(move_up)),
-            ("l", command!(move_right)),
-            ("gg", command!(goto_line_default_top)),
-            ("dd", command!(delete_line)),
-            ("G", command!(goto_line_default_bottom)),
-            ("u", command!(undo)),
-            ("<C-r>", command!(redo)),
-            ("zs", command!(save)), // tmp
-            ("ZZ", command!(close)),
-            ("x", command!(remove_char)),
-            (":", command!(command_mode)),
+            ("h", c("move_left")),
+            ("j", c("move_down")),
+            ("k", c("move_up")),
+            ("l", c("move_right")),
+            ("gg", c("goto_line_default_top")),
+            ("dd", c("delete_line")),
+            ("G", c("goto_line_default_bottom")),
+            ("u", c("undo")),
+            ("<C-r>", c("redo")),
+            ("zs", c("save")), // tmp
+            ("ZZ", c("close")),
+            ("x", c("remove_char")),
+            (":", c("command_mode")),
             // buffer
-            ("<TAB>", command!(buffer_next)),
-            ("<S-TAB>", command!(buffer_prev)),
-            ("<C-b>c", command!(buffer_create)),
-            ("<C-b>k", command!(buffer_kill)),
+            ("<TAB>", c("buffer_next")),
+            ("<S-TAB>", c("buffer_prev")),
+            ("<C-b>c", c("buffer_create")),
+            ("<C-b>k", c("buffer_kill")),
         ];
 
         Self::with_mappings(mappings)
     }
 
-    pub fn with_mappings(mappings: impl IntoIterator<Item = (&'static str, Command)>) -> Self {
+    pub fn with_mappings(mappings: impl IntoIterator<Item = (&'static str, Arc<Command>)>) -> Self {
         let mut keymap = Self::default();
 
         let mut mappings = mappings
@@ -138,7 +151,7 @@ impl Keymap {
 
 #[derive(Debug)]
 pub enum KeymapTreeElement {
-    Leaf(Command),
+    Leaf(Arc<Command>),
     Node(Keymap),
 }
 
@@ -148,7 +161,8 @@ mod test {
 
     #[test]
     fn test_keymap() {
-        let keymap = Keymap::normal_mode();
+        let registry = CommandRegistry::populate();
+        let keymap = Keymap::normal_mode(&registry);
         println!("Keymap {keymap:#?}");
     }
 }
