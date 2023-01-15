@@ -286,6 +286,7 @@ name = "kaka-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bitflags",
  "env_logger",
  "log",
  "ropey",

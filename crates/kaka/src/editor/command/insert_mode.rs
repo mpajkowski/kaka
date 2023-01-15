@@ -3,7 +3,7 @@ use kaka_core::{document::TransactionLeave, transaction::Transaction};
 
 use crate::{
     current_mut,
-    editor::{buffer::UpdateBufPositionParams, Mode},
+    editor::{buffer::UpdateBufPositionParams, ModeKind},
 };
 
 use super::CommandData;
@@ -11,7 +11,7 @@ use super::CommandData;
 pub fn insert_mode_on_key(ctx: &mut CommandData, event: KeyEvent) {
     let (buf, doc) = current_mut!(ctx.editor);
 
-    debug_assert!(matches!(buf.mode(), Mode::Insert));
+    debug_assert!(matches!(buf.mode(), ModeKind::Insert));
 
     doc.with_transaction(|doc, insert_tx| {
         let text = doc.text_mut();

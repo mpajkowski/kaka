@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
 use crossterm::event::{Event, KeyCode, KeyEvent};
-use kaka_core::shapes::{Point, Rect};
+use kaka_core::{
+    shapes::{Point, Rect},
+    span::{SpanIterator, SpanKind},
+};
 
 use super::{Context, Cursor, EventOutcome, Widget};
 use crate::{
@@ -132,21 +135,48 @@ impl Widget for EditorWidget {
         let text = doc.text();
 
         let max_y = (area.height as usize).min(text.len_lines());
+
+        if max_y == 0 {
+            return;
+        }
+
         let vscroll = buf.vscroll();
+
+        let selection_range = buf.selection().map(|s| s.range());
 
         let style = Style::default().fg(Color::Yellow).bg(Color::Black);
 
         for y in 0..max_y {
-            let line = text.line(y + vscroll);
+            let line_idx = y + vscroll;
+            let line = text.line(line_idx);
+            let line_char = text.line_to_char(line_idx);
+            let max_len = (area.width as usize).min(line.len_chars());
 
-            let line_render = line.slice(0..(area.width as usize).min(line.len_chars()));
+            let selection_range = selection_range.and_then(|(start, end)| {
+                let overlaps = start <= line_char + max_len && line_char <= end;
 
-            surface.set_stringn(
-                Point::new(area.x, y as u16),
-                &line_render.to_string(),
-                area.width as usize,
-                style,
-            );
+                let start_in_line = start.saturating_sub(line_char).min(max_len);
+                let end_in_line = end.saturating_sub(line_char).min(max_len);
+
+                (start_in_line != end_in_line || overlaps).then_some((start_in_line, end_in_line))
+            });
+
+            SpanIterator::new(line, selection_range).for_each(|span| {
+                let style = if span.kind.contains(SpanKind::SELECTION) {
+                    style.bg(Color::Gray)
+                } else {
+                    style
+                };
+
+                let range = span.range;
+
+                surface.set_stringn(
+                    Point::new(area.x + range.start as u16, y as u16),
+                    &line.slice(range).to_string(),
+                    max_len,
+                    style,
+                );
+            });
         }
     }
 
@@ -169,7 +199,6 @@ impl Widget for EditorWidget {
             callback: None,
         };
 
-        // TODO delegate to Mode?
         if let Some(command) = command {
             command.call(&mut context);
             self.reset();

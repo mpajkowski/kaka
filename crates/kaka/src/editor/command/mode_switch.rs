@@ -1,9 +1,9 @@
-use kaka_core::{document::TransactionLeave, graphemes::nth_next_grapheme_boundary};
+use kaka_core::{document::TransactionLeave, graphemes::next_grapheme_boundary};
 
 use crate::{
     client::composer::PromptWidget,
     current_mut,
-    editor::{buffer::UpdateBufPositionParams, Mode},
+    editor::{buffer::UpdateBufPositionParams, ModeKind},
 };
 
 use super::CommandData;
@@ -38,7 +38,7 @@ fn switch_to_insert_mode_impl(ctx: &mut CommandData, switch: Switch) {
 
     let (buf, doc) = current_mut!(ctx.editor);
 
-    buf.switch_mode(Mode::Insert);
+    buf.switch_mode(ModeKind::Insert);
 
     let pos = buf.text_pos();
 
@@ -49,7 +49,7 @@ fn switch_to_insert_mode_impl(ctx: &mut CommandData, switch: Switch) {
     let approx_new_pos = match switch {
         Inplace => pos,
         LineStart => line_char,
-        After => line_char + nth_next_grapheme_boundary(line, pos - line_char, 1),
+        After => line_char + next_grapheme_boundary(line, pos - line_char),
         LineEnd => line_char + line_len,
     };
 
@@ -76,7 +76,7 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
     let (buf, doc) = current_mut!(ctx.editor);
 
     let was_insert = buf.mode().is_insert();
-    buf.switch_mode(Mode::Normal);
+    buf.switch_mode(ModeKind::Normal);
 
     // move one cell left when exiting insert mode and commit transaction
     if was_insert {
@@ -95,6 +95,12 @@ pub fn switch_to_normal_mode(ctx: &mut CommandData) {
             TransactionLeave::Commit
         });
     }
+}
+
+pub fn switch_to_visual_mode(ctx: &mut CommandData) {
+    let (buf, _) = current_mut!(ctx.editor);
+
+    buf.switch_mode(ModeKind::Visual);
 }
 
 pub fn command_mode(ctx: &mut CommandData) {

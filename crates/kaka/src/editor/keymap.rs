@@ -7,7 +7,7 @@ use std::{
 use anyhow::{Context, Result};
 use crossterm::event::KeyEvent;
 
-use super::{command::*, Mode};
+use super::{command::*, ModeKind};
 use registry::Registry as CommandRegistry;
 
 #[derive(Debug, Default)]
@@ -16,11 +16,11 @@ pub struct Keymaps {
 }
 
 impl Keymaps {
-    pub fn register_keymap_for_mode(&mut self, mode: &Mode, keymap: Keymap) -> Option<Keymap> {
+    pub fn register_keymap_for_mode(&mut self, mode: &ModeKind, keymap: Keymap) -> Option<Keymap> {
         self.keymaps.insert(mode.name().to_string(), keymap)
     }
 
-    pub fn keymap_for_mode(&self, mode: &Mode) -> Result<&Keymap> {
+    pub fn keymap_for_mode(&self, mode: ModeKind) -> Result<&Keymap> {
         let mode = mode.name();
         self.keymaps
             .get(mode)
@@ -50,6 +50,31 @@ impl Keymap {
         Self::with_mappings([("<ESC>", c("switch_to_normal_mode"))])
     }
 
+    pub fn visual_mode(registry: &CommandRegistry) -> Self {
+        let c = |name: &str| {
+            registry
+                .mappable_command_by_name(name)
+                .expect("Failed to find command")
+        };
+
+        let mappings = [
+            // mode_switch
+            ("<ESC>", c("switch_to_normal_mode")),
+            (":", c("command_mode")),
+            // movement
+            ("h", c("move_left")),
+            ("j", c("move_down")),
+            ("k", c("move_up")),
+            ("l", c("move_right")),
+            ("gg", c("goto_line_default_top")),
+            ("G", c("goto_line_default_bottom")),
+            // text_manipulation
+            ("x", c("kill")),
+        ];
+
+        Self::with_mappings(mappings)
+    }
+
     pub fn normal_mode(registry: &CommandRegistry) -> Self {
         let c = |name: &str| {
             registry
@@ -58,30 +83,33 @@ impl Keymap {
         };
 
         let mappings = [
-            // mode
+            // buffer_mgmt
+            ("<TAB>", c("buffer_next")),
+            ("<S-TAB>", c("buffer_prev")),
+            ("<C-b>c", c("buffer_create")),
+            ("<C-b>k", c("buffer_kill")),
+            ("zs", c("save")), // tmp
+            ("ZZ", c("close")),
+            // mode_switch
             ("i", c("switch_to_insert_mode_inplace")),
             ("I", c("switch_to_insert_mode_line_start")),
             ("a", c("switch_to_insert_mode_after")),
             ("A", c("switch_to_insert_mode_line_end")),
+            ("v", c("switch_to_visual_mode")),
             // movement
             ("h", c("move_left")),
             ("j", c("move_down")),
             ("k", c("move_up")),
             ("l", c("move_right")),
             ("gg", c("goto_line_default_top")),
-            ("dd", c("delete_line")),
             ("G", c("goto_line_default_bottom")),
+            // text_manipulation
+            ("dd", c("kill_line")),
+            ("x", c("kill")),
+            (":", c("command_mode")),
+            // history
             ("u", c("undo")),
             ("<C-r>", c("redo")),
-            ("zs", c("save")), // tmp
-            ("ZZ", c("close")),
-            ("x", c("remove_char")),
-            (":", c("command_mode")),
-            // buffer
-            ("<TAB>", c("buffer_next")),
-            ("<S-TAB>", c("buffer_prev")),
-            ("<C-b>c", c("buffer_create")),
-            ("<C-b>k", c("buffer_kill")),
         ];
 
         Self::with_mappings(mappings)

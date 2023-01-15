@@ -12,7 +12,7 @@ use kaka_core::document::{Document, DocumentId};
 use kaka_core::ropey::Rope;
 use kaka_core::shapes::{Point, Rect};
 pub use keymap::{Keymap, KeymapTreeElement};
-pub use mode::Mode;
+pub use mode::ModeKind;
 
 use crate::client::composer::Cursor;
 use crate::client::Redraw;
@@ -37,8 +37,9 @@ impl Editor {
         let mut keymaps = Keymaps::default();
         let registry = CommandRegistry::populate();
 
-        keymaps.register_keymap_for_mode(&Mode::Insert, Keymap::insert_mode(&registry));
-        keymaps.register_keymap_for_mode(&Mode::Normal, Keymap::normal_mode(&registry));
+        keymaps.register_keymap_for_mode(&ModeKind::Insert, Keymap::insert_mode(&registry));
+        keymaps.register_keymap_for_mode(&ModeKind::Normal, Keymap::normal_mode(&registry));
+        keymaps.register_keymap_for_mode(&ModeKind::Visual, Keymap::visual_mode(&registry));
 
         Self {
             buffers: BTreeMap::new(),
@@ -89,7 +90,7 @@ impl Editor {
     pub fn cursor(&self, area: Rect) -> Cursor {
         let (buf, doc) = current!(self);
         let line_idx = buf.line_idx();
-        let y = (area.width as usize).min(line_idx - buf.vscroll());
+        let y = (area.width as usize).min(line_idx.saturating_sub(buf.vscroll()));
         let x = {
             let distance = buf.text_pos() - buf.line_char();
             doc.column(line_idx, distance)

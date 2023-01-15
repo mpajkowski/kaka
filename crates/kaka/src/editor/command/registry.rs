@@ -55,6 +55,7 @@ impl Registry {
 
         let commands = [
             command!(switch_to_normal_mode),
+            command!(switch_to_visual_mode),
             command!(switch_to_insert_mode_inplace),
             command!(switch_to_insert_mode_line_start),
             command!(switch_to_insert_mode_after),
@@ -64,13 +65,13 @@ impl Registry {
             command!(move_up),
             command!(move_right),
             command!(goto_line_default_top),
-            command!(delete_line),
+            command!(kill_line),
             command!(goto_line_default_bottom),
             command!(undo),
             command!(redo),
             command!(save, ["w"]),
             command!(close, ["q"]),
-            command!(remove_char),
+            command!(kill),
             command!(command_mode, false, true),
             command!(buffer_next),
             command!(buffer_prev),
