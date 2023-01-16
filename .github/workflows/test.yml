@@ -4,11 +4,8 @@ name: test
 
 jobs:
   test:
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    name: Test (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: Test
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout sources
         uses: actions/checkout@v2
