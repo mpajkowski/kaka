@@ -122,9 +122,11 @@ impl Surface {
         for s in graphemes {
             let width = s.width();
 
-            if width == 0 {
-                continue;
-            }
+            // we want to render at least one cell with background
+            let (s, width) = match width {
+                0 => (" ", 1),
+                _ => (s, width),
+            };
 
             if width > max_offset.saturating_sub(x_offset) {
                 break;

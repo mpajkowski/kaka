@@ -9,7 +9,9 @@ pub mod document;
 pub mod graphemes;
 pub mod history;
 pub mod languages;
+pub mod selection;
 pub mod shapes;
+pub mod span;
 pub mod transaction;
 
 // re-export ropey
